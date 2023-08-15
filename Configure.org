@@ -125,7 +125,7 @@ It's nice to know that Emacs is somewhat working. To help this along, we set the
 
      ;; Set the variable pitch face
      (set-face-attribute 'variable-pitch nil
-        :font "SF Pro"
+        :font "Optima"
         :height mrf/default-variable-font-size
         :weight 'regular))
 
@@ -152,6 +152,7 @@ It's nice to know that Emacs is somewhat working. To help this along, we set the
             material-theme
             timu-caribbean-theme
             timu-macos-theme
+            modus-themes
          ))
 
    (mapc #'(lambda (theme)

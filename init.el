@@ -80,7 +80,7 @@
 
    ;; Set the variable pitch face
    (set-face-attribute 'variable-pitch nil
-      :font "SF Pro"
+      :font "Optima"
       :height mrf/default-variable-font-size
       :weight 'regular))
 
@@ -101,6 +101,7 @@
           material-theme
           timu-caribbean-theme
           timu-macos-theme
+          modus-themes
        ))
 
  (mapc #'(lambda (theme)
@@ -1336,24 +1337,22 @@ capture was not aborted."
 
 ;;; ===========================================================================
 (custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages
-     '(ace-window dap-python yasnippet-snippets winum which-key vterm visual-fill-column typescript-mode treemacs-tab-bar treemacs-projectile treemacs-persp treemacs-magit treemacs-icons-dired treemacs-evil tree-sitter-langs timu-macos-theme timu-caribbean-theme realgud rainbow-delimiters pyvenv-auto python-mode py-autopep8 org-roam org-bullets neotree modus-themes material-theme lsp-ui lsp-ivy ivy-yasnippet ivy-rich ivy-prescient immaterial-theme helpful general forge flycheck exotica-theme evil-nerd-commenter eterm-256color eshell-git-prompt elpy eglot doom-themes doom-modeline dired-single dired-open dired-hide-dotfiles dashboard dap-mode counsel-projectile company-jedi company-box color-theme-sanityinc-tomorrow blacken bind-key better-defaults avy auto-package-update auto-complete all-the-icons-dired))
- '(warning-suppress-log-types
-     '(((package reinitialization))
-	 (use-package)
-	 (python-mode)
-	 (package-initialize))))
+   ;; custom-set-variables was added by Custom.
+   ;; If you edit it by hand, you could mess it up, so be careful.
+   ;; Your init file should contain only one such instance.
+   ;; If there is more than one, they won't work right.
+   '(warning-suppress-log-types
+       '(((package reinitialization))
+           (use-package)
+           (python-mode)
+           (package-initialize))))
 
   ;;; init.el ends here.
 (custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
+   ;; custom-set-faces was added by Custom.
+   ;; If you edit it by hand, you could mess it up, so be careful.
+   ;; Your init file should contain only one such instance.
+   ;; If there is more than one, they won't work right.
+   )
 
 ;;  (dashboard-open)
