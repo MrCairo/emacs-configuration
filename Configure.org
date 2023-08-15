@@ -226,7 +226,7 @@ The following values are things that are just general quality-of-life settings.
   (general-def  prog-mode-map
      "C-c ]"  'indent-region
      "C-c }"  'indent-region)
-
+  
 #+end_src
 
 
@@ -260,15 +260,16 @@ Emacs has a built in package manager but it doesn't make it easy to automaticall
   ;;
   (defvar mrf/must-install-packages
      '(
-         cl-lib
-         auto-complete
-         bind-key
+	 cl-lib
+	 auto-complete
+	 bind-key
+	 winum
       ))
 
   (mapc #'(lambda (item)
-            (unless (package-installed-p item)
-              (package-install item)))
-        mrf/must-install-packages)
+	    (unless (package-installed-p item)
+	      (package-install item)))
+	mrf/must-install-packages)
 
 #+end_src
 
@@ -342,6 +343,163 @@ These are useful snippets of code that are commonly used in various languages. Y
 #+end_src
 
 
+* Treemacs
+Treemacs is a file and project explorer similar to NeoTree or vim’s NerdTree, but largely inspired by the Project Explorer in Eclipse. It shows the file system outlines of your projects in a simple tree layout allowing quick navigation and exploration, while also possessing basic file management utilities.
+
+** Winum
+Window numbers for Emacs: Navigate your windows and frames using numbers. This is not only handy but used by Treemacs.
+#+begin_src emacs-lisp
+
+  ;;; ------------------------------------------------------------------------
+  
+  (require 'winum)
+  (winum-mode)
+
+#+end_src
+
+** Treemacs Config
+
+#+begin_src emacs-lisp
+
+  (use-package treemacs
+    :ensure t
+    :defer t
+    :init
+    (with-eval-after-load 'winum
+      (define-key winum-keymap (kbd "M-0") #'treemacs-select-window))
+    :config
+    (progn
+      (setq treemacs-collapse-dirs                   (if treemacs-python-executable 3 0)
+            treemacs-deferred-git-apply-delay        0.5
+            treemacs-directory-name-transformer      #'identity
+            treemacs-display-in-side-window          t
+            treemacs-eldoc-display                   'simple
+            treemacs-file-event-delay                2000
+            treemacs-file-extension-regex            treemacs-last-period-regex-value
+            treemacs-file-follow-delay               0.2
+            treemacs-file-name-transformer           #'identity
+            treemacs-follow-after-init               t
+            treemacs-expand-after-init               t
+            treemacs-find-workspace-method           'find-for-file-or-pick-first
+            treemacs-git-command-pipe                ""
+            treemacs-goto-tag-strategy               'refetch-index
+            treemacs-header-scroll-indicators        '(nil . "^^^^^^")
+            treemacs-hide-dot-git-directory          t
+            treemacs-indentation                     2
+            treemacs-indentation-string              " "
+            treemacs-is-never-other-window           nil
+            treemacs-max-git-entries                 5000
+            treemacs-missing-project-action          'ask
+            treemacs-move-forward-on-expand          nil
+            treemacs-no-png-images                   nil
+            treemacs-no-delete-other-windows         t
+            treemacs-project-follow-cleanup          nil
+            treemacs-persist-file                    (expand-file-name ".cache/treemacs-persist" user-emacs-directory)
+            treemacs-position                        'left
+            treemacs-read-string-input               'from-child-frame
+            treemacs-recenter-distance               0.1
+            treemacs-recenter-after-file-follow      nil
+            treemacs-recenter-after-tag-follow       nil
+            treemacs-recenter-after-project-jump     'always
+            treemacs-recenter-after-project-expand   'on-distance
+            treemacs-litter-directories              '("/node_modules" "/.venv" "/.cask" "/__pycache__")
+            treemacs-project-follow-into-home        nil
+            treemacs-show-cursor                     nil
+            treemacs-show-hidden-files               t
+            treemacs-silent-filewatch                nil
+            treemacs-silent-refresh                  nil
+            treemacs-sorting                         'alphabetic-asc
+            treemacs-select-when-already-in-treemacs 'move-back
+            treemacs-space-between-root-nodes        t
+            treemacs-tag-follow-cleanup              t
+            treemacs-tag-follow-delay                1.5
+            treemacs-text-scale                      nil
+            treemacs-user-mode-line-format           nil
+            treemacs-user-header-line-format         nil
+            treemacs-wide-toggle-width               70
+            treemacs-width                           35
+            treemacs-width-increment                 1
+            treemacs-width-is-initially-locked       t
+            treemacs-workspace-switch-cleanup        nil)
+
+      ;; The default width and height of the icons is 22 pixels. If you are
+      ;; using a Hi-DPI display, uncomment this to double the icon size.
+      ;;(treemacs-resize-icons 44)
+
+      (treemacs-follow-mode t)
+      (treemacs-filewatch-mode t)
+      (treemacs-fringe-indicator-mode 'always)
+      ;; (when treemacs-python-executable
+      ;;   (treemacs-git-commit-diff-mode t))
+
+      ;; (pcase (cons (not (null (executable-find "git")))
+      ;;              (not (null treemacs-python-executable)))
+      ;;   (`(t . t)
+      ;;    (treemacs-git-mode 'deferred))
+      ;;   (`(t . _)
+      ;;    (treemacs-git-mode 'simple)))
+
+      (treemacs-hide-gitignored-files-mode nil))
+    :bind
+    (:map global-map
+          ("M-0"       . treemacs-select-window)
+          ("C-x t 1"   . treemacs-delete-other-windows)
+          ("C-x t t"   . treemacs)
+          ("C-x t d"   . treemacs-select-directory)
+          ("C-x t B"   . treemacs-bookmark)
+          ("C-x t C-t" . treemacs-find-file)
+          ("C-x t M-t" . treemacs-find-tag)))
+
+#+end_src
+
+*** Treemacs Projectile
+#+begin_src emacs-lisp
+
+  (use-package treemacs-projectile
+    :after (treemacs projectile)
+    :ensure t)
+
+#+end_src
+
+*** Treemacs magit
+#+begin_src emacs-lisp
+
+  (use-package treemacs-magit
+    :after (treemacs magit)
+    :ensure t)
+
+#+end_src
+
+*** Treemacs dired
+#+begin_src emacs-lisp
+
+  (use-package treemacs-icons-dired
+     :hook (dired-mode . treemacs-icons-dired-enable-once)
+     :ensure t)
+
+#+end_src
+
+*** Treemacs Persp
+#+begin_src emacs-lisp
+
+  (use-package treemacs-persp ;;treemacs-perspective if you use perspective.el vs. persp-mode
+    :after (treemacs persp-mode) ;;or perspective vs. persp-mode
+    :ensure t
+    :config (treemacs-set-scope-type 'Perspectives))
+
+#+end_src
+
+*** Treemacs tab-bar
+#+begin_src emacs-lisp
+  
+  (use-package treemacs-tab-bar ;;treemacs-tab-bar if you use tab-bar-mode
+    :after (treemacs)
+    :ensure t
+    :config (treemacs-set-scope-type 'Tabs))
+
+#+end_src
+
+
 * Language Server Protocol
 
 #+begin_src emacs-lisp 
@@ -381,7 +539,11 @@ These are useful snippets of code that are commonly used in various languages. Y
      "C-c l d" 'lsp-ui-doc-focus-frame)
 
   (use-package lsp-treemacs
-    :after lsp)
+     :after lsp
+     :config
+     (lsp-treemacs-sync-mode 1)
+     (general-def prog-mode-map
+        "C-c t" 'treemacs))
 
   (use-package lsp-ivy
     :after lsp ivy)
@@ -390,7 +552,6 @@ These are useful snippets of code that are commonly used in various languages. Y
   (setq read-process-output-max (* 1024 1024))
 
 #+end_src
-
 
 ** EGlot
 
@@ -408,25 +569,26 @@ These are useful snippets of code that are commonly used in various languages. Y
 
 Provides a common protocol for debugging different systems. This is configured for Python
 
-#+begin_src emacs-lisp 
+#+begin_src emacs-lisp
 
-      ;;; ------------------------------------------------------------------------
-      (use-package dap-mode
-        ;; Uncomment the config below if you want all UI panes to be hidden by default!
-        ;; :custom
-        ;; (lsp-enable-dap-auto-configure nil)
-        :config
-         (dap-ui-mode 1)
-         (setq lsp-enable-dap-auto-configure nil)
-        :commands
-         dap-debug
-        :custom
-         (dap-auto-configure-features '(sessions locals controls tooltip)))
+  ;;; ------------------------------------------------------------------------
+  (use-package dap-mode
+    ;; Uncomment the config below if you want all UI panes to be hidden by default!
+    ;; :custom
+    ;; (lsp-enable-dap-auto-configure nil)
+    :config
+     (message "DAP mode loaded.")
+     (dap-ui-mode 1)
+     (setq lsp-enable-dap-auto-configure nil)
+    :commands
+     dap-debug
+    :custom
+     (dap-auto-configure-features '(sessions locals controls tooltip)))
 
-      (setq dap-python-debugger 'debugpy)
+  (setq dap-python-debugger 'debugpy)
 
-      ;; (use-package dap-hydra
-      ;;    :hook (dap-stopped . (lambda (arg) (call-interactively #'dap-hydra))))
+  ;; (use-package dap-hydra
+  ;;    :hook (dap-stopped . (lambda (arg) (call-interactively #'dap-hydra))))
 
 #+end_src
 
@@ -645,7 +807,7 @@ This is more support for a language rather than a langage itself
   (message "    singleton-decorator") ;; Needed for several projects
 
   (defun mrf/load-python-file-hook ()
-     (message "Running python Hook")
+     (message "Running python file Hook")
      (python-mode)
      (dap-mode)
      (display-fill-column-indicator-mode -1)
@@ -664,10 +826,7 @@ This is more support for a language rather than a langage itself
   (add-to-list 'auto-mode-alist '("\\.py\\'" . mrf/load-python-file-hook))
   (use-package blacken) ;Format Python file upon save.
 
-
 #+end_src
-
-#+RESULTS:
 
 *** ELPY and RealGUD
 Elpy is an Emacs package to bring powerful Python editing to Emacs.  It combines and configures a number of other packages, both written in Emacs Lisp as well as Python.  Elpy is fully documented at [[https://elpy.readthedocs.io/en/latest/index.html][read the docs]].
@@ -715,34 +874,41 @@ autopep8 automatically formats Python code to conform to the `PEP 8` style guide
 *** Python Keybinding
 #+begin_src emacs-lisp
 
-  ;;; -----------------------------------------------------------------
-  (if (package-installed-p 'dap-mode)
-    (general-def python-mode-map
-       "C-c . /"       'dap-step-in
-       "C-c . <right>" 'dap-step-in
-       "C-c . ,"       'dap-step-out
-       "C-c . <left>"    'dap-step-out
-       "C-c . ."       'dap-next
-       "C-c . <down>"  'dap-next
-       "C-c . ?" 'dap-breakpoint-condition
-       "C-c . C-b" 'dap-ui-breakpoints
-       "C-c . C-b" 'dap-ui-breakpoints
-       "C-c . C-c" 'dap-ui-controls-mode
-       "C-c . C-e" 'dap-ui-expressions
-       "C-c . C-l" 'dap-ui-locals
-       "C-c . C-r" 'dap-ui-repl
-       "C-c . b" 'dap-breakpoint-toggle
-       "C-c . c" 'dap-continue
-       "C-c . d" 'dap-debug
-       "C-c . C-d" 'dap-debug-last
-       "C-c . i" 'dap-step-in
-       "C-c . n" 'dap-next
-       "C-c . o" 'dap-step-out
-       "C-c . r" 'dap-debug-restart
-       "C-c . t" 'dap-breakpoint-toggle
-       "C-c . x" 'dap-disconnect
-       "C-c . C-x" 'dap-delete-session
-       "C-c }" 'indent-region))
+    (defun mrf/end-debug-session ()
+       "End the debug session and delete project Python buffers."
+       (interactive)
+       (kill-matching-buffers "\*Python :: Run file [from|\(buffer]*" nil :NO-ASK)
+       (kill-matching-buffers "\*Python: Current File*" nil :NO-ASK)
+       (dap-disconnect (dap--cur-session)))
+
+    ;;; -----------------------------------------------------------------
+    (if (package-installed-p 'dap-mode)
+      (general-def python-mode-map
+         "C-c . /"       'dap-step-in
+         "C-c . <right>" 'dap-step-in
+         "C-c . ,"       'dap-step-out
+         "C-c . <left>"    'dap-step-out
+         "C-c . ."       'dap-next
+         "C-c . <down>"  'dap-next
+         "C-c . ?" 'dap-breakpoint-condition
+         "C-c . C-b" 'dap-ui-breakpoints
+         "C-c . C-b" 'dap-ui-breakpoints
+         "C-c . C-c" 'dap-ui-controls-mode
+         "C-c . C-e" 'dap-ui-expressions
+         "C-c . C-l" 'dap-ui-locals
+         "C-c . C-r" 'dap-ui-repl
+         "C-c . b" 'dap-breakpoint-toggle
+         "C-c . c" 'dap-continue
+         "C-c . d" 'dap-debug
+         "C-c . C-d" 'dap-debug-last
+         "C-c . i" 'dap-step-in
+         "C-c . n" 'dap-next
+         "C-c . o" 'dap-step-out
+         "C-c . r" 'dap-debug-restart
+         "C-c . t" 'dap-breakpoint-toggle
+         "C-c . x" 'mrf/end-debug-session
+         "C-c . C-x" 'dap-delete-session
+         "C-c }" 'indent-region))
 
 #+end_src
 
@@ -1352,7 +1518,6 @@ This snippet adds a hook to =org-mode= buffers so that =efs/org-babel-tangle-con
 The following packages are some additional quality of life features.
 
 ** Ace Window
-
 [[https://github.com/abo-abo/ace-window][ace-window]] is a package for selecting a window to switch to. Like =other-window= but better!
 
 #+begin_src emacs-lisp
@@ -1365,7 +1530,6 @@ The following packages are some additional quality of life features.
         "M-o" 'ace-window))
   
 #+end_src
-
 
 ** Dashboard
 
@@ -1820,25 +1984,52 @@ This little function toggles between a larger font size and the default font siz
 
 #+begin_src emacs-lisp
 
-  (defvar mrf/use-large-font-size t)
+  (defvar mrf/font-size-slot 1)
 
-  (defun mrf/toggle-font-size ()
-     (if (equal mrf/use-large-font-size t)
+  (defun mrf/update-font-size ()
+     (message "adjusting font size")
+     (if (equal mrf/font-size-slot 2)
         (progn
-           (setq mrf/use-large-font-size nil)
+           (message "Large Font")
            (setq mrf/default-font-size 200)
            (setq mrf/default-variable-font-size 200)
+           (setq mrf/font-size-slot 1)
            (mrf/update-face-attribute))
-        (progn
-           (setq mrf/use-large-font-size t)
-           (setq mrf/default-font-size 175)
-           (setq mrf/default-variable-font-size 175)
-           (mrf/update-face-attribute))
-        )
-     )
+        (if (equal mrf/font-size-slot 1)
+           (progn
+              (message "Medium Font")
+              (setq mrf/default-font-size 175)
+              (setq mrf/default-variable-font-size 175)
+              (setq mrf/font-size-slot 0)
+              (mrf/update-face-attribute))
+           (progn
+              (message "Small Font")
+              (setq mrf/default-font-size 150)
+              (setq mrf/default-variable-font-size 150)
+              (setq mrf/font-size-slot 2)
+              (mrf/update-face-attribute)))))
 
   (general-define-key
-     "C-c x" '(lambda () (interactive) (mrf/toggle-font-size)))
+     "C-c x" '(lambda () (interactive) (mrf/update-font-size)))
+
+  ;; Some alternate keys below....
+  (general-define-key
+     "C-c 1" '(lambda ()
+                 (interactive)
+                 (setq mrf/font-size-slot 0)
+                 (mrf/update-font-size)))
+
+  (general-define-key
+     "C-c 2" '(lambda ()
+                 (interactive)
+                 (setq mrf/font-size-slot 1)
+                 (mrf/update-font-size)))
+
+  (general-define-key
+     "C-c 3" '(lambda ()
+                 (interactive)
+                 (setq mrf/font-size-slot 2)
+                 (mrf/update-font-size)))
 
 #+end_src
 
@@ -1869,4 +2060,3 @@ This little function toggles between a larger font size and the default font siz
     ;;  (dashboard-open)
 
 #+end_src
-

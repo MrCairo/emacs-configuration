@@ -189,11 +189,12 @@
        cl-lib
        auto-complete
        bind-key
+       winum
     ))
 
 (mapc #'(lambda (item)
-          (unless (package-installed-p item)
-            (package-install item)))
+	  (unless (package-installed-p item)
+	    (package-install item)))
       mrf/must-install-packages)
 
 ;;; -----------------------------------------------------------------
@@ -237,6 +238,122 @@
    (which-key-setup-side-window-right))
 
 ;;; ------------------------------------------------------------------------
+
+(require 'winum)
+(winum-mode)
+
+(use-package treemacs
+  :ensure t
+  :defer t
+  :init
+  (with-eval-after-load 'winum
+    (define-key winum-keymap (kbd "M-0") #'treemacs-select-window))
+  :config
+  (progn
+    (setq treemacs-collapse-dirs                   (if treemacs-python-executable 3 0)
+          treemacs-deferred-git-apply-delay        0.5
+          treemacs-directory-name-transformer      #'identity
+          treemacs-display-in-side-window          t
+          treemacs-eldoc-display                   'simple
+          treemacs-file-event-delay                2000
+          treemacs-file-extension-regex            treemacs-last-period-regex-value
+          treemacs-file-follow-delay               0.2
+          treemacs-file-name-transformer           #'identity
+          treemacs-follow-after-init               t
+          treemacs-expand-after-init               t
+          treemacs-find-workspace-method           'find-for-file-or-pick-first
+          treemacs-git-command-pipe                ""
+          treemacs-goto-tag-strategy               'refetch-index
+          treemacs-header-scroll-indicators        '(nil . "^^^^^^")
+          treemacs-hide-dot-git-directory          t
+          treemacs-indentation                     2
+          treemacs-indentation-string              " "
+          treemacs-is-never-other-window           nil
+          treemacs-max-git-entries                 5000
+          treemacs-missing-project-action          'ask
+          treemacs-move-forward-on-expand          nil
+          treemacs-no-png-images                   nil
+          treemacs-no-delete-other-windows         t
+          treemacs-project-follow-cleanup          nil
+          treemacs-persist-file                    (expand-file-name ".cache/treemacs-persist" user-emacs-directory)
+          treemacs-position                        'left
+          treemacs-read-string-input               'from-child-frame
+          treemacs-recenter-distance               0.1
+          treemacs-recenter-after-file-follow      nil
+          treemacs-recenter-after-tag-follow       nil
+          treemacs-recenter-after-project-jump     'always
+          treemacs-recenter-after-project-expand   'on-distance
+          treemacs-litter-directories              '("/node_modules" "/.venv" "/.cask" "/__pycache__")
+          treemacs-project-follow-into-home        nil
+          treemacs-show-cursor                     nil
+          treemacs-show-hidden-files               t
+          treemacs-silent-filewatch                nil
+          treemacs-silent-refresh                  nil
+          treemacs-sorting                         'alphabetic-asc
+          treemacs-select-when-already-in-treemacs 'move-back
+          treemacs-space-between-root-nodes        t
+          treemacs-tag-follow-cleanup              t
+          treemacs-tag-follow-delay                1.5
+          treemacs-text-scale                      nil
+          treemacs-user-mode-line-format           nil
+          treemacs-user-header-line-format         nil
+          treemacs-wide-toggle-width               70
+          treemacs-width                           35
+          treemacs-width-increment                 1
+          treemacs-width-is-initially-locked       t
+          treemacs-workspace-switch-cleanup        nil)
+
+    ;; The default width and height of the icons is 22 pixels. If you are
+    ;; using a Hi-DPI display, uncomment this to double the icon size.
+    ;;(treemacs-resize-icons 44)
+
+    (treemacs-follow-mode t)
+    (treemacs-filewatch-mode t)
+    (treemacs-fringe-indicator-mode 'always)
+    ;; (when treemacs-python-executable
+    ;;   (treemacs-git-commit-diff-mode t))
+
+    ;; (pcase (cons (not (null (executable-find "git")))
+    ;;              (not (null treemacs-python-executable)))
+    ;;   (`(t . t)
+    ;;    (treemacs-git-mode 'deferred))
+    ;;   (`(t . _)
+    ;;    (treemacs-git-mode 'simple)))
+
+    (treemacs-hide-gitignored-files-mode nil))
+  :bind
+  (:map global-map
+        ("M-0"       . treemacs-select-window)
+        ("C-x t 1"   . treemacs-delete-other-windows)
+        ("C-x t t"   . treemacs)
+        ("C-x t d"   . treemacs-select-directory)
+        ("C-x t B"   . treemacs-bookmark)
+        ("C-x t C-t" . treemacs-find-file)
+        ("C-x t M-t" . treemacs-find-tag)))
+
+(use-package treemacs-projectile
+  :after (treemacs projectile)
+  :ensure t)
+
+(use-package treemacs-magit
+  :after (treemacs magit)
+  :ensure t)
+
+(use-package treemacs-icons-dired
+   :hook (dired-mode . treemacs-icons-dired-enable-once)
+   :ensure t)
+
+(use-package treemacs-persp ;;treemacs-perspective if you use perspective.el vs. persp-mode
+  :after (treemacs persp-mode) ;;or perspective vs. persp-mode
+  :ensure t
+  :config (treemacs-set-scope-type 'Perspectives))
+
+(use-package treemacs-tab-bar ;;treemacs-tab-bar if you use tab-bar-mode
+  :after (treemacs)
+  :ensure t
+  :config (treemacs-set-scope-type 'Tabs))
+
+;;; ------------------------------------------------------------------------
 (defun mrf/lsp-mode-setup ()
   "Set up LSP header-line."
   (setq lsp-headerline-breadcrumb-segments '(path-up-to-project file symbols))
@@ -271,7 +388,11 @@
    "C-c l d" 'lsp-ui-doc-focus-frame)
 
 (use-package lsp-treemacs
-  :after lsp)
+   :after lsp
+   :config
+   (lsp-treemacs-sync-mode 1)
+   (general-def prog-mode-map
+      "C-c t" 'treemacs))
 
 (use-package lsp-ivy
   :after lsp ivy)
@@ -290,6 +411,7 @@
   ;; :custom
   ;; (lsp-enable-dap-auto-configure nil)
   :config
+   (message "DAP mode loaded.")
    (dap-ui-mode 1)
    (setq lsp-enable-dap-auto-configure nil)
   :commands
@@ -435,7 +557,7 @@
 (message "    singleton-decorator") ;; Needed for several projects
 
 (defun mrf/load-python-file-hook ()
-   (message "Running python Hook")
+   (message "Running python file Hook")
    (python-mode)
    (dap-mode)
    (display-fill-column-indicator-mode -1)
@@ -475,6 +597,13 @@
  :config
  (add-hook 'python-mode-hook 'py-autopep8-mode))
 
+(defun mrf/end-debug-session ()
+   "End the debug session and delete project Python buffers."
+   (interactive)
+   (kill-matching-buffers "\*Python :: Run file [from|\(buffer]*" nil :NO-ASK)
+   (kill-matching-buffers "\*Python: Current File*" nil :NO-ASK)
+   (dap-disconnect (dap--cur-session)))
+
 ;;; -----------------------------------------------------------------
 (if (package-installed-p 'dap-mode)
   (general-def python-mode-map
@@ -500,7 +629,7 @@
      "C-c . o" 'dap-step-out
      "C-c . r" 'dap-debug-restart
      "C-c . t" 'dap-breakpoint-toggle
-     "C-c . x" 'dap-disconnect
+     "C-c . x" 'mrf/end-debug-session
      "C-c . C-x" 'dap-delete-session
      "C-c }" 'indent-region))
 
@@ -1158,25 +1287,52 @@ capture was not aborted."
                                  (use-package)
                                  (python-mode)))
 
-(defvar mrf/use-large-font-size t)
+(defvar mrf/font-size-slot 1)
 
-(defun mrf/toggle-font-size ()
-   (if (equal mrf/use-large-font-size t)
+(defun mrf/update-font-size ()
+   (message "adjusting font size")
+   (if (equal mrf/font-size-slot 2)
       (progn
-         (setq mrf/use-large-font-size nil)
+         (message "Large Font")
          (setq mrf/default-font-size 200)
          (setq mrf/default-variable-font-size 200)
+         (setq mrf/font-size-slot 1)
          (mrf/update-face-attribute))
-      (progn
-         (setq mrf/use-large-font-size t)
-         (setq mrf/default-font-size 175)
-         (setq mrf/default-variable-font-size 175)
-         (mrf/update-face-attribute))
-      )
-   )
+      (if (equal mrf/font-size-slot 1)
+         (progn
+            (message "Medium Font")
+            (setq mrf/default-font-size 175)
+            (setq mrf/default-variable-font-size 175)
+            (setq mrf/font-size-slot 0)
+            (mrf/update-face-attribute))
+         (progn
+            (message "Small Font")
+            (setq mrf/default-font-size 150)
+            (setq mrf/default-variable-font-size 150)
+            (setq mrf/font-size-slot 2)
+            (mrf/update-face-attribute)))))
 
 (general-define-key
-   "C-c x" '(lambda () (interactive) (mrf/toggle-font-size)))
+   "C-c x" '(lambda () (interactive) (mrf/update-font-size)))
+
+;; Some alternate keys below....
+(general-define-key
+   "C-c 1" '(lambda ()
+               (interactive)
+               (setq mrf/font-size-slot 0)
+               (mrf/update-font-size)))
+
+(general-define-key
+   "C-c 2" '(lambda ()
+               (interactive)
+               (setq mrf/font-size-slot 1)
+               (mrf/update-font-size)))
+
+(general-define-key
+   "C-c 3" '(lambda ()
+               (interactive)
+               (setq mrf/font-size-slot 2)
+               (mrf/update-font-size)))
 
 ;;; ===========================================================================
 (custom-set-variables
@@ -1185,7 +1341,7 @@ capture was not aborted."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-     '(dap-python yasnippet-snippets which-key vterm visual-fill-column typescript-mode tree-sitter-langs timu-macos-theme timu-caribbean-theme realgud rainbow-delimiters pyvenv-auto python-mode py-autopep8 org-roam org-bullets neotree modus-themes material-theme lsp-ui lsp-ivy ivy-yasnippet ivy-rich ivy-prescient immaterial-theme helpful general forge flycheck exotica-theme evil-nerd-commenter eterm-256color eshell-git-prompt elpy eglot doom-themes doom-modeline dired-single dired-open dired-hide-dotfiles dashboard dap-mode counsel-projectile company-jedi company-box color-theme-sanityinc-tomorrow blacken bind-key better-defaults auto-package-update auto-complete all-the-icons-dired))
+     '(ace-window dap-python yasnippet-snippets winum which-key vterm visual-fill-column typescript-mode treemacs-tab-bar treemacs-projectile treemacs-persp treemacs-magit treemacs-icons-dired treemacs-evil tree-sitter-langs timu-macos-theme timu-caribbean-theme realgud rainbow-delimiters pyvenv-auto python-mode py-autopep8 org-roam org-bullets neotree modus-themes material-theme lsp-ui lsp-ivy ivy-yasnippet ivy-rich ivy-prescient immaterial-theme helpful general forge flycheck exotica-theme evil-nerd-commenter eterm-256color eshell-git-prompt elpy eglot doom-themes doom-modeline dired-single dired-open dired-hide-dotfiles dashboard dap-mode counsel-projectile company-jedi company-box color-theme-sanityinc-tomorrow blacken bind-key better-defaults avy auto-package-update auto-complete all-the-icons-dired))
  '(warning-suppress-log-types
      '(((package reinitialization))
 	 (use-package)
