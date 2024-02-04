@@ -11,6 +11,23 @@ This ORG file will configure the *init.el* file based upon all of the *emacs-lis
 *NOTE:* Most of the code below has been taken from the [[https://systemcrafters.net][System Crafters]] site run by David Wilson. Please visit that site for lots of great stuff!
 
 
+* Feature Enabling Switches
+Set various variables to =t= to turn on a specific feature or =0= to disable it. Changing any of these values will require a restart of ~emacs~ since these values are inspected only during startup.
+
+*Note:* There are no thorough dependency check done if any of these values is enabled or disabled. There has been some effort, for example, to enable a keymap if ~dap~ or ~dape~ is enabled. But if something enabled requires some not obvious package to be installed, this isn't checked.
+
+#+begin_src emacs-lisp
+
+  (setq enable-dap 0            ;; Debug Adapter Protocol 
+        enable-dape t           ;; DAP for Emacs. Can't do both
+        enable-corfu 0          ;; Alternative to Ivy/Swiper/Company 
+        enable-org-ai 0         ;; Interface to OpenAI
+        enable-centaur-tabs 0   ;; Top Tabs for files
+        enable-golden-ratio 0)  ;; Re-size active frame to golden ratio
+
+#+end_src
+
+
 * Early Setup
 
 ** Straight
@@ -33,39 +50,6 @@ This ORG file will configure the *init.el* file based upon all of the *emacs-lis
     (load bootstrap-file nil 'nomessage))
 
   (setq straight-use-package-by-default t)
-
-#+end_src
-
-** Startup Performance
-
-#+begin_src emacs-lisp
-
-  ;;; =========================================================================
-  ;;; startup
-  ;;; The default is 800 kilobytes.  Measured in bytes.
-  ;;; Process performance tuning
-
-  (add-hook 'after-init-hook
-     (lambda ()
-  	;; warn when opening files bigger than 100MB
-  	(setq large-file-warning-threshold 100000000)
-  	;; reduce the frequency of garbage collection by making it happen on
-  	;; each 50MB of allocated data (the default is on every 0.76MB)
-  	(setq gc-cons-threshold 50000000)))
-
-  (setq read-process-output-max (* 4 1024 1024))
-  (setq process-adaptive-read-buffering nil)
-
-  (defun mrf/display-startup-time ()
-     "Calculate and display startup time."
-     (message "Emacs loaded in %s with %d garbage collections."
-  	(format "%.2f seconds"
-  	   (float-time
-  	      (time-subtract after-init-time before-init-time)))
-  	gcs-done))
-
-  (add-hook 'emacs-startup-hook #'mrf/display-startup-time)
-
 
 #+end_src
 
@@ -279,11 +263,44 @@ Features:
 
   (use-package auto-complete
     :straight (auto-complete :type git
-			     :flavor melpa
-			     :files ("*.el" "dict" "auto-complete-pkg.el")
-			     :host github
-			     :repo "auto-complete/auto-complete"))
+  			     :flavor melpa
+  			     :files ("*.el" "dict" "auto-complete-pkg.el")
+  			     :host github
+  			     :repo "auto-complete/auto-complete"))
 
+    (defvar ac-directory (unless (file-exists-p "auto-complete")
+                         (make-directory "auto-complete")))
+    (add-to-list 'load-path ac-directory)
+
+  (global-auto-complete-mode 1)
+  (setq-default ac-sources '(ac-source-pycomplete
+                             ac-source-yasnippet
+                             ac-source-abbrev
+                             ac-source-dictionary
+                             ac-source-words-in-same-mode-buffers))
+
+  ; hack to fix ac-sources after pycomplete.el breaks it
+  (add-hook 'python-mode-hook
+            #'(lambda ()
+               (setq ac-sources '(ac-source-pycomplete
+                                  ac-source-yasnippet
+                                  ac-source-abbrev
+                                  ac-source-dictionary
+                                  ac-source-words-in-same-mode-buffers))))
+
+  ;; from http://truongtx.me/2013/01/06/config-yasnippet-and-autocomplete-on-emacs/
+  ;; set the trigger key so that it can work together with yasnippet on
+  ;; tab key, if the word exists in yasnippet, pressing tab will cause
+  ;; yasnippet to activate, otherwise, auto-complete will
+  (ac-set-trigger-key "TAB")
+  (ac-set-trigger-key "<tab>")
+
+
+  ;; from http://blog.deadpansincerity.com/2011/05/setting-up-emacs-as-a-javascript-editing-environment-for-fun-and-profit/
+  ;; Start auto-completion after 2 characters of a word
+  (setq ac-auto-start 2)
+  ;; case sensitivity is important when finding matches
+  (setq ac-ignore-case nil)
 
 #+end_src
 
@@ -431,13 +448,45 @@ Selec a theme (or themes) to load. The last one specified is the one that is use
 * Common Settings
 The following values are things that are just general quality-of-life settings.
 
+** Miscellaneous Settings
 #+begin_src emacs-lisp
 
-  ;;; -------------------------------------------------------------------------
-  ;;; Common Settings
-
   (show-paren-mode 1)
+  (setq inhibit-startup-message t)     ;; Hide the startup message
+  (setq visible-bell t)                ;; Set up the visible bell
+  (save-place-mode 1)                  ;; Remember where we were last editing a file.
+  (setq backup-inhibited t)            ;; disable backup (No ~ tilde files)
+  (setq auto-save-default nil)         ;; disable auto save
+  (column-number-mode)
+  (global-display-line-numbers-mode 1) ;; Line numbers appear everywhere
+  (setq-default fill-column 80)        ;; number of characters until the fill column
+  (setq lisp-indent-offset '3)         ;; emacs lisp tab size
 
+  ;; each line of text gets one line on the screen (i.e., text will run
+  ;; off the left instead of wrapping around onto a new line)
+  (setq-default truncate-lines 1)
+  
+  (global-prettify-symbols-mode 1)     ;; Display pretty symbols (i.e. λ = lambda)
+  (setq truncate-partial-width-windows 1) ;; truncate lines even in partial-width windows
+
+  (use-package evil-nerd-commenter
+     :bind ("M-/" . evilnc-comment-or-uncomment-lines))
+
+  (use-package rainbow-delimiters
+    :config
+    (rainbow-delimiters-mode))
+
+  (setq dired-listing-switches "-agho --group-directories-first")
+  (setq dired-dwim-target t)
+  (setq pixel-scroll-mode t)           ;; enable smooth scrolling.
+
+#+end_src
+
+** Mac Specific
+#+begin_src emacs-lisp
+
+  ;;; Macintosh specific configurations.
+  
   (defconst *is-a-mac* (eq system-type 'darwin))
   (when (eq system-type 'darwin)
      (setq mac-option-key-is-meta t
@@ -445,40 +494,37 @@ The following values are things that are just general quality-of-life settings.
            mac-command-modifier 'none
            mac-option-modifier 'meta))
 
-  (setq inhibit-startup-message t)  ;; Hide the startup message
-  (setq visible-bell t)             ;; Set up the visible bell
+#+end_src
 
-  (save-place-mode 1)          ;; Remember where we were last editing a file.
 
-  (setq backup-inhibited t)    ;; disable backup
-  (setq auto-save-default nil) ;; disable auto save
+** Prompt Indicator / minibuffer
+#+begin_src emacs-lisp
 
-  (column-number-mode)
-  (global-display-line-numbers-mode 1) ;; Line numbers appear everywhere
+    (use-package emacs
+      :init
+      ;; Add prompt indicator to `completing-read-multiple'.
+      ;; We display [CRM<separator>], e.g., [CRM,] if the separator is a comma.
+      (defun crm-indicator (args)
+        (cons (format "[CRM%s] %s"
+                      (replace-regexp-in-string
+                       "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+                       crm-separator)
+                      (car args))
+              (cdr args)))
+      (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
 
-  ;; number of characters until the fill column
-  (setq-default fill-column 80)
+      ;; Do not allow the cursor in the minibuffer prompt
+      (setq minibuffer-prompt-properties
+            '(read-only t cursor-intangible t face minibuffer-prompt))
+      (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
-  ;; emacs lisp tab size
-  (setq lisp-indent-offset '3)
+      ;; Enable recursive minibuffers
+      (setq enable-recursive-minibuffers t))
 
-  ;; each line of text gets one line on the screen (i.e., text will run
-  ;; off the left instead of wrapping around onto a new line)
-  (setq-default truncate-lines 1)
+#+end_src
 
-  (global-prettify-symbols-mode 1) ;; Display pretty symbols (i.e. λ = lambda)
-
-  ;; truncate lines even in partial-width windows
-  (setq truncate-partial-width-windows 1)
-
-  (use-package evil-nerd-commenter
-     :bind ("M-/" . evilnc-comment-or-uncomment-lines))
-
-  ;;; (use-package treemacs-all-the-icons)
-
-  (use-package rainbow-delimiters
-    :config
-    (rainbow-delimiters-mode))
+** General key-binding
+#+begin_src emacs-lisp
 
   (use-package general
      :straight t)
@@ -490,15 +536,6 @@ The following values are things that are just general quality-of-life settings.
   (general-define-key
      "C-x C-j" 'dired-jump)
 
-  (setq dired-listing-switches "-agho --group-directories-first")
-  (setq dired-dwim-target t)
-
-  (if (boundp 'python-shell-completion-native-disabled-interpreters)
-     (add-to-list 'python-shell-completion-native-disabled-interpreters "python3")
-   (setq python-shell-completion-native-disabled-interpreters '("python3")))
-
-  ;;; smooth scrolling.
-  (setq pixel-scroll-mode t)
 
 #+end_src
 
@@ -809,6 +846,211 @@ Window numbers for Emacs: Navigate your windows and frames using numbers. This i
 
 #+end_src
 
+** Python Keybinding for Realgud
+Since Realgud is options (in our configuratrion), we add it's keybindings conditionally. *Note* that these keybindings are still compatible with =dap-mode= keybindings.
+
+#+begin_src emacs-lisp
+
+  ;;; =========================================================================
+  (if (package-installed-p 'realgud)
+     (general-def python-mode-map
+        "M-p" 'python-nav-backward-defun
+        "M-n" 'python-nav-forward-defun
+        "C-c p" 'elpy-goto-definition
+        "C-c h" 'elpy-doc
+        "C-c , j" 'realgud:cmd-jump
+        "C-c , k" 'realgud:cmd-kill
+        "C-c , s" 'realgud:cmd-step
+        "C-c , n" 'realgud:cmd-next
+        "C-c , q" 'realgud:cmd-quit
+        "C-c , F" 'realgud:window-bt
+        "C-c , U" 'realgud:cmd-until
+        "C-c , X" 'realgud:cmd-clear
+        "C-c , !" 'realgud:cmd-shell
+        "C-c , b" 'realgud:cmd-break
+        "C-c , f" 'realgud:cmd-finish
+        "C-c , D" 'realgud:cmd-delete
+        "C-c , +" 'realgud:cmd-enable
+        "C-c , R" 'realgud:cmd-restart
+        "C-c , -" 'realgud:cmd-disable
+        "C-c , B" 'realgud:window-brkpt
+        "C-c , c" 'realgud:cmd-continue
+        "C-c , e" 'realgud:cmd-eval-dwim
+        "C-c , Q" 'realgud:cmd-terminate
+        "C-c , T" 'realgud:cmd-backtrace
+        "C-c , h" 'realgud:cmd-until-here
+        "C-c , u" 'realgud:cmd-older-frame
+        "C-c , 4" 'realgud:cmd-goto-loc-hist-4
+        "C-c , 5" 'realgud:cmd-goto-loc-hist-5
+        "C-c , 6" 'realgud:cmd-goto-loc-hist-6
+        "C-c , 7" 'realgud:cmd-goto-loc-hist-7
+        "C-c , 8" 'realgud:cmd-goto-loc-hist-8
+        "C-c , 9" 'realgud:cmd-goto-loc-hist-9
+        "C-c , d" 'realgud:cmd-newer-frame
+        "C-c , RET" 'realgud:cmd-repeat-last
+        "C-c , E" 'realgud:cmd-eval-at-point
+        "C-c , I" 'realgud:cmdbuf-info-describe
+        "C-c , C-d" 'realgud:pdb
+        "C-c , C-f" 'realgud:flake8-goto-msg-line
+        "C-c , C-i" 'realgud:cmd-info-breakpoints))
+
+#+end_src
+
+
+* Debug Adapter Protocol for Emacs (DAPE)
+#+begin_src emacs-lisp
+
+  (require 'jsonrpc)
+
+  (if (equal enable-dape t)
+     (progn
+        (use-package dape
+  	 :after (jsonrpc)
+  	 ;; To use window configuration like gud (gdb-mi)
+  	 ;; :init
+  	 ;; (setq dape-buffer-window-arrangement 'gud)
+  	 :custom
+  	 (dape-buffer-window-arrangement 'right)  ;; Info buffers to the right
+  	 ;; To not display info and/or buffers on startup
+  	 ;; (remove-hook 'dape-on-start-hooks 'dape-info)
+  	 ;; (remove-hook 'dape-on-start-hooks 'dape-repl)
+
+  	 ;; To display info and/or repl buffers on stopped
+  	 ;; (add-hook 'dape-on-stopped-hooks 'dape-info)
+  	 ;; (add-hook 'dape-on-stopped-hooks 'dape-repl)
+
+  	 ;; By default dape uses gdb keybinding prefix
+  	 ;; If you do not want to use any prefix, set it to nil.
+  	 ;; (setq dape-key-prefix "\C-x\C-a")
+
+  	 ;; Kill compile buffer on build success
+  	 ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
+
+  	 ;; Save buffers on startup, useful for interpreted languages
+  	 ;; (add-hook 'dape-on-start-hooks
+  	 ;;           (defun dape--save-on-start ()
+  	 ;;             (save-some-buffers t t)))
+
+  	 ;; Projectile users
+  	 ;; (setq dape-cwd-fn 'projectile-project-root)
+  	 ;; :straight (dape :type git
+  	 ;; 	      :host github :repo "emacs-straight/dape"
+  	 ;; 	      :files ("*" (:exclude ".git")))
+  	 )
+        )
+     )
+
+#+end_src
+
+** Dape for TypeScript
+
+#+begin_src emacs-lisp
+
+  (setq mrf/vscode-js-debug-dir (file-name-concat user-emacs-directory "dape/vscode-js-debug"))
+
+  (defun mrf/install-vscode-js-debug ()
+     "Run installation procedure to install JS debugging support"
+     (interactive)
+     (mkdir mrf/vscode-js-debug-dir t)
+     (let ((default-directory (expand-file-name mrf/vscode-js-debug-dir)))
+         
+        (vc-git-clone "https://github.com/microsoft/vscode-js-debug.git" "." nil)
+        (message "git repository created")
+        (call-process "npm" nil "*snam-install*" t "install")
+        (message "npm dependencies installed")
+        (call-process "npx" nil "*snam-install*" t "gulp" "dapDebugServer")
+        (message "vscode-js-debug installed")))
+
+  (if (equal enable-dape t)
+     (add-to-list 'dape-configs
+        `(vscode-js-node
+  	  modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
+  	  host "localhost"
+  	  port 8123
+  	  command "node"
+  	  command-cwd ,(file-name-concat mrf/vscode-js-debug-dir "dist")
+  	  command-args ("src/dapDebugServer.js" "8123")
+  	  :type "pwa-node"
+  	  :request "launch"
+  	  :cwd dape-cwd-fn
+  	  :program dape--default-cwd
+  	  :outputCapture "console"
+  	  :sourceMapRenames t
+  	  :pauseForSourceMap nil
+  	  :enableContentValidation t
+  	  :autoAttachChildProcesses t
+  	  :console "internalConsole"
+  	  :killBehavior "forceful")))
+
+#+end_src
+
+*** Run Only Once!
+
+This is meant to be evaluated and run once. Calling this function will clone the vscode-js-debug framework. This is a DAP-based JavaScript debugger. It debugs Node.js, Chrome, Edge, WebView2, VS Code extensions, and more. It has been the default JavaScript debugger in Visual Studio Code since 1.46, and is gradually rolling out in Visual Studio proper.
+
+#+begin_src emacs-lisp :tangle no
+
+  (mrf/install-vscode-js-debug)
+
+#+end_src
+
+** DAPE-Hydra
+#+begin_src emacs-lisp :results none
+  (defun mrf/dape-end-debug-session ()
+     "End the debug session and delete project Python buffers."
+     (interactive)
+     (dape-quit))
+
+  (defun mrf/dape-delete-all-debug-sessions ()
+     "End the debug session and delete project Python buffers and all breakpoints."
+     (interactive)
+     (dape-breakpoint-remove-all)
+     (mrf/dape-end-debug-session))
+
+  (defhydra dape-hydra (:color pink :hint nil :foreign-keys run)
+     "
+    ^Stepping^          ^Switch^                 ^Breakpoints^          ^Debug^                     ^Eval
+    ^^^^^^^^----------------------------------------------------------------------------------------------------------------
+    _._: Next           _st_: Thread            _bb_: Toggle           _dd_: Debug                 _ee_: Eval Expression
+    _/_: Step in        _si_: Info              _bd_: Delete           _dw_: Watch dwim
+    _,_: Step out       _sf_: Stack Frame       _ba_: Add              _dx_: end session
+    _c_: Continue       _su_: Up stack frame    _bc_: Set condition    _dX_: end all sessions
+    _r_: Restart frame  _sd_: Down stack frame  _bl_: Set log message
+    _Q_: Disconnect     _sR_: Session Repl
+                        _sU_: Info Update
+
+  "
+           ("n" dape-next)
+           ("i" dape-step-in)
+           ("o" dape-step-out)
+           ("." dape-next)
+           ("/" dape-step-in)
+           ("," dape-step-out)
+           ("c" dape-continue)
+           ("r" dape-restart)
+           ("si" dape-info)
+           ("st" dape-select-thread)
+           ("sf" dape-select-stack)
+           ("su" dape-stack-select-up)
+           ("sU" dape-info-update)
+           ("sd" dape-stack-select-down)
+           ("sR" dape-repl)
+           ("bb" dape-breakpoint-toggle)
+           ("ba" dape--breakpoint-place)
+           ("bd" dape-breakpoint-remove-at-point)
+           ("bc" dape-breakpoint-expression)
+           ("bl" dape-breakpoint-log)
+           ("dd" dape)
+           ("dw" dape-watch-dwim)
+           ("ee" dape-evaluate-expression)
+           ("dx" mrf/dape-end-debug-session)
+           ("dX" mrf/dape-delete-all-debug-sessions)
+           ("x" nil "exit Hydra" :color yellow)
+           ("q" mrf/dape-end-debug-session "quit" :color blue)
+           ("Q" mrf/dape-delete-all-debug-sessions :color red))  
+
+ #+end_src
+
 
 * Debug Adapter Protocol
 
@@ -825,24 +1067,29 @@ Provides a common protocol for debugging different systems. This is configured f
   ;; 	 :host github
   ;; 	 :repo "emacs-lsp/dap-mode"))
 
-  (use-package dap-mode
-     :straight (dap-mode :type git
-		  :flavor melpa
-		  :files (:defaults "icons" "dap-mode-pkg.el")
-		  :host github
-		  :repo "emacs-lsp/dap-mode")
-     ;; Uncomment the config below if you want all UI panes to be hidden by default!
-     ;; :custom
-     ;; (lsp-enable-dap-auto-configure nil)
-     :config
-     (message "DAP mode loaded.")
-     (dap-ui-mode 1)
-     ;; (setq lsp-enable-dap-auto-configure nil)
-     (setq dap-python-executable "python3") ;; Otherwise it looks for 'python' else error.
-     :commands
-     dap-debug
-     :custom
-     (dap-auto-configure-features '(locals repl)))
+  (if (equal enable-dap t)
+     (progn
+        (use-package dap-mode
+  	 :straight (dap-mode :type git
+  		      :flavor melpa
+  		      :files (:defaults "icons" "dap-mode-pkg.el")
+  		      :host github
+  		      :repo "emacs-lsp/dap-mode")
+  	 ;; Uncomment the config below if you want all UI panes to be hidden by default!
+  	 ;; :custom
+  	 ;; (lsp-enable-dap-auto-configure nil)
+  	 :config
+  	 (message "DAP mode loaded.")
+  	 (dap-ui-mode 1)
+  	 ;; (setq lsp-enable-dap-auto-configure nil)
+  	 (setq dap-python-executable "python3") ;; Otherwise it looks for 'python' else error.
+  	 :commands
+  	 dap-debug
+  	 :custom
+  	 (dap-auto-configure-features '(locals repl))
+  	 )
+        )
+     )
 
   (setq dap-python-debugger 'debugpy)
 
@@ -858,25 +1105,31 @@ Provides a common protocol for debugging different systems. This is configured f
   ;;; ------------------------------------------------------------------------
   ;;; DAP for Python
 
-  (use-package dap-python
-     :straight (dap-python :type git :host github :repo "emacs-lsp/dap-mode")
-     :after (dap-mode)
-     :config
-     (dap-register-debug-template "Python :: Run file from project directory"
-	(list :type "python"
-	   :args ""
-	   :cwd nil
-	   :module nil
-	   :program nil
-	   :request "launch"))
-     (dap-register-debug-template "Python :: Run file (buffer)"
-	(list :type "python"
-	   :args ""
-	   :cwd nil
-	   :module nil
-	   :program nil
-	   :request "launch"
-	   :name "Python :: Run file (buffer)")))
+  (if (equal enable-dap t)
+     (progn
+        (use-package dap-python
+  	 :straight (dap-python :type git :host github :repo "emacs-lsp/dap-mode")
+  	 :after (dap-mode)
+  	 :config
+  	 (dap-register-debug-template "Python :: Run file from project directory"
+  	    (list :type "python"
+  	       :args ""
+  	       :cwd nil
+  	       :module nil
+  	       :program nil
+  	       :request "launch"))
+  	 (dap-register-debug-template "Python :: Run file (buffer)"
+  	    (list :type "python"
+  	       :args ""
+  	       :cwd nil
+  	       :module nil
+  	       :program nil
+  	       :request "launch"
+  	       :name "Python :: Run file (buffer)"))
+  	 )
+        )
+     )
+     
 
 #+end_src
 
@@ -891,28 +1144,30 @@ Provides a common protocol for debugging different systems. This is configured f
      (require 'dap-node)
      (unless (file-exists-p dap-node-debug-path) (dap-node-setup)))
 
-  (use-package dap-node
-   :after (dap-mode)
-   :straight (dap-node :type git
-  		:flavor melpa
-  		:files (:defaults "icons" "dap-mode-pkg.el")
-  		:host github
-  		:repo "emacs-lsp/dap-mode")
-   :config
-     (require 'dap-firefox)
-     ;; (dap-register-debug-template
-     ;;    "Launch index.ts"
-     ;;    (list :type "node"
-     ;; 	 :request "launch"
-     ;; 	 :program "${workspaceFolder}/index.ts"
-     ;; 	 :dap-compilation "npx tsc index.ts --outdir dist --sourceMap true"
-     ;; 	 :outFiles (list "${workspaceFolder}/dist/**/*.js")
-     ;; 	 :name "Launch index.ts"))
+  (if (equal enable-dap t)
+     (progn
+        (use-package dap-node
+  	 :after (dap-mode)
+  	 :straight (dap-node :type git
+  		      :flavor melpa
+  		      :files (:defaults "icons" "dap-mode-pkg.el")
+  		      :host github
+  		      :repo "emacs-lsp/dap-mode")
+  	 :config
+  	 (require 'dap-firefox)
+  	 ;; (dap-register-debug-template
+  	 ;;    "Launch index.ts"
+  	 ;;    (list :type "node"
+  	 ;; 	 :request "launch"
+  	 ;; 	 :program "${workspaceFolder}/index.ts"
+  	 ;; 	 :dap-compilation "npx tsc index.ts --outdir dist --sourceMap true"
+  	 ;; 	 :outFiles (list "${workspaceFolder}/dist/**/*.js")
+  	 ;; 	 :name "Launch index.ts"))
+  	 )
+        (add-hook 'typescript-mode-hook 'my-setup-dap-node)
+        (add-hook 'javascript-mode-hook 'my-setup-dap-node)
+        )
      )
-
-  (add-hook 'typescript-mode-hook 'my-setup-dap-node)
-  (add-hook 'javascript-mode-hook 'my-setup-dap-node)
-
 
 #+end_src
 
@@ -934,29 +1189,22 @@ The Hydra is vanquished once Hercules, any binding that isn't the Hydra's head, 
 #+end_src
 
 
-* IVY Mode
-Ivy is an excellent completion framework for Emacs.  It provides a minimal yet powerful selection menu that appears when you open files, switch buffers, and for many other tasks in Emacs.  Counsel is a customized set of commands to replace `find-file` with `counsel-find-file`, etc which provide useful commands for each of the default completion commands.
+* Completion Systems
+Here are a series of completion systems that are available for Emacs.
 
-[[https://github.com/Yevgnen/ivy-rich][ivy-rich
-]] adds extra columns to a few of the Counsel commands to provide more information about each item.
+** IVY Mode
+Ivy is an excellent completion framework for Emacs.  It provides a minimal yet powerful selection menu that appears when you open files, switch buffers, and for many other tasks in Emacs.  Counsel is a customized set of commands to replace `find-file` with `counsel-find-file`, etc which provide useful commands for each of the default completion commands.
 
 #+begin_src emacs-lisp
 
   ;;; ------------------------------------------------------------------------
   ;;; Swiper and IVY mode
 
-  (use-package swiper
-     :straight (swiper :type git
-  		  :flavor melpa
-  		  :files ("swiper.el" "swiper-pkg.el")
-  		  :host github
-  		  :repo "abo-abo/swiper"))
-
   (use-package ivy
      :diminish
      :bind (("C-s" . swiper)
   	    :map ivy-minibuffer-map
-  	    ("TAB" . ivy-alt-done)
+  	    ;;; ("TAB" . ivy-alt-done)
   	    ("C-l" . ivy-alt-done)
   	    ("C-j" . ivy-next-line)
   	    ("C-k" . ivy-previous-line)
@@ -973,35 +1221,115 @@ Ivy is an excellent completion framework for Emacs.  It provides a minimal yet p
 
   (use-package ivy-rich
      :after ivy
-    :straight (ivy-rich :type git :flavor melpa :host github :repo "Yevgnen/ivy-rich")
-    :init
-    (ivy-rich-mode 1))
+     :straight (ivy-rich :type git :flavor melpa :host github :repo "Yevgnen/ivy-rich")
+     :init
+     (ivy-rich-mode 1))
 
-  (use-package counsel
-     ;; :straight (counsel :type git
-     ;; 		:flavor melpa
-     ;; 		:files ("counsel.el" "counsel-pkg.el")
-     ;; 		:host github :repo "abo-abo/swiper")
-     :bind (("C-M-j" . 'counsel-switch-buffer)
-  	    :map minibuffer-local-map
-  	    ("C-r" . 'counsel-minibuffer-history))
-     :custom
-     (counsel-linux-app-format-function #'counsel-linux-app-format-function-name-only)
-     :config
-     (counsel-mode 1))
+  (use-package ivy-yasnippet
+     :straight (ivy-yasnippet :type git :flavor melpa :host github :repo "mkcms/ivy-yasnippet"))
 
+
+#+end_src
+
+*** Swiper
+Swiper is an alternative to isearch that uses Ivy to show an overview of all matches.
+
+#+begin_src emacs-lisp
+  
+  (use-package swiper
+     :straight (swiper :type git
+  		  :flavor melpa
+  		  :files ("swiper.el" "swiper-pkg.el")
+  		  :host github
+  		  :repo "abo-abo/swiper"))
+
+#+end_src
+
+*** Counsel
+
+~ivy-mode~ ensures that any Emacs command using completing-read-function uses ivy for completion.
+Counsel takes this further, providing versions of common Emacs commands that are customised to make the best use of Ivy. For example, ~counsel-find-file~ has some additional keybindings. Pressing =DEL= will move you to the parent directory.
+
+#+begin_src emacs-lisp
+
+    (use-package counsel
+       :straight t
+       :bind (("C-M-j" . 'counsel-switch-buffer)
+    	    :map minibuffer-local-map
+    	    ("C-r" . 'counsel-minibuffer-history))
+       :custom
+       (counsel-linux-app-format-function #'counsel-linux-app-format-function-name-only)
+       :config
+       (counsel-mode 1))
+
+#+end_src
+
+*** Ivy Prescient
+~prescient.el~ is a library which sorts and filters lists of candidates, such as appear when you use a package like =Ivy= or =Company=.
+
+#+begin_src emacs-lisp
+  
   (use-package ivy-prescient
     :after counsel
     :custom
     (ivy-prescient-enable-filtering nil)
     :config
-    ;; Uncomment the following line to have sorting remembered across sessions!
     (prescient-persist-mode 1)
     (ivy-prescient-mode 1))
 
-  (use-package ivy-yasnippet
-     :straight (ivy-yasnippet :type git :flavor melpa :host github :repo "mkcms/ivy-yasnippet"))
+#+end_src
 
+** Corfu
+Corfu enhances in-buffer completion with a small completion popup. The current candidates are shown in a popup below or above the point. The candidates can be selected by moving up and down. Corfu is the minimalistic in-buffer completion counterpart of the Vertico minibuffer UI.
+
+#+begin_src emacs-lisp
+
+  ;;;; Code Completion
+  (if (equal enable-corfu t)
+     (use-package corfu
+        ;; Optional customizations
+        :custom
+        (corfu-cycle t)                 ; Allows cycling through candidates
+        (corfu-auto t)                  ; Enable auto completion
+        (corfu-auto-prefix 2)
+        (corfu-auto-delay 0.8)
+        (corfu-popupinfo-delay '(0.5 . 0.2))
+        (corfu-preview-current 'insert) ; insert previewed candidate
+        (corfu-preselect 'prompt)
+        (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
+        ;; Optionally use TAB for cycling, default is `corfu-complete'.
+        :bind (:map corfu-map
+                 ("M-SPC"      . corfu-insert-separator)
+                 ("TAB"        . corfu-next)
+                 ([tab]        . corfu-next)
+                 ("S-TAB"      . corfu-previous)
+                 ([backtab]    . corfu-previous)
+                 ("S-<return>" . corfu-insert)
+                 ("RET"        . nil))
+
+        :init
+        (global-corfu-mode)
+        (corfu-history-mode)
+        (corfu-popupinfo-mode) ; Popup completion info
+        :config
+        (add-hook 'eshell-mode-hook
+  	 (lambda () (setq-local corfu-quit-at-boundary t
+                    corfu-quit-no-match t
+                    corfu-auto nil)
+              (corfu-mode)))))
+
+#+end_src
+
+*** Orderless
+This package provides an orderless completion style that divides the pattern into space-separated components, and matches candidates that match all of the components in any order. Each component can match in any one of several ways: literally, as a regexp, as an initialism, in the flex style, or as multiple word prefixes. By default, regexp and literal matches are enabled.
+
+#+begin_src emacs-lisp
+    
+  (use-package orderless
+    :straight t
+    :custom
+    (completion-styles '(orderless basic))
+    (completion-category-overrides '((file (styles basic partial-completion)))))
 
 #+end_src
 
@@ -1056,15 +1384,29 @@ This is a basic configuration for the TypeScript language so that =.ts= files ac
 
 #+begin_src emacs-lisp
 
-    ;;; -----------------------------------------------------------------
+  ;;; -----------------------------------------------------------------
 
-    (use-package typescript-ts-mode
-       :after (dap-mode)
-       :mode "\\.ts\\'"
-       :hook (typescript-ts-mode . lsp-deferred)
-       :config
-       (setq typescript-indent-level 4)
-       (dap-node-setup))
+  (if (equal enable-dap t)
+     (use-package typescript-ts-mode
+        ;; :after (dap-mode)
+        :mode "\\.ts\\'"
+        :hook (typescript-ts-mode . lsp-deferred)
+        :config
+        (setq typescript-indent-level 4)
+        (dap-node-setup)))
+
+  (if (equal enable-dape t)
+     (use-package typescript-ts-mode
+        ;; :after (dape-mode)
+        :mode "\\.ts\\'"
+        :hook (typescript-ts-mode . lsp-deferred)
+        :config
+        (general-define-key
+  	 :keymaps '(typescript-ts-mode-map)
+  	 "C-c ." 'dape-hydra/body)
+        (setq typescript-indent-level 4)))
+     
+  (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 
 #+end_src
 
@@ -1078,17 +1420,20 @@ This is a basic configuration for the TypeScript language so that =.ts= files ac
      (dap-firefox-setup)
      (highlight-indentation-mode -1))
 
-  (use-package js2-mode
-     :straight (js2-mode :type git :flavor melpa :host github :repo "mooz/js2-mode")
-     :custom
-     (js-indent-level 2)
-     (dap-firefox-debug-program
-        '("node" "/Users/strider/.emacs.d.mitchorg/.extension/vscode/firefox-devtools.vscode-firefox-debug/extension/dist/adapter.bundle.js"))
-     :init
-     (require 'dap-firefox))
-
-  (add-to-list 'auto-mode-alist '("\\.[m]js\\'" . mrf/load-js-file-hook))
-
+  (if (equal enable-dap t)
+     (progn
+        (use-package js2-mode
+  	 :straight (js2-mode :type git :flavor melpa :host github :repo "mooz/js2-mode")
+  	 :custom
+  	 (js-indent-level 2)
+  	 (dap-firefox-debug-program
+  	    '("node" "/Users/strider/.emacs.d.mitchorg/.extension/vscode/firefox-devtools.vscode-firefox-debug/extension/dist/adapter.bundle.js"))
+  	 :init
+  	 (require 'dap-firefox))
+        (add-to-list 'auto-mode-alist '("\\.[m]js\\'" . mrf/load-js-file-hook))
+        )
+     )
+  
 #+end_src
 
 ** C/C++
@@ -1161,9 +1506,11 @@ This is more support for a language rather than a langage itself
 Before any work can begin in python, make sure that the right packages are installed.
 
 #+begin_src shell :results output silent
+
   pip3 install --upgrade pip
   pip3 install "python-lsp-server[all]"
   pip3 install debugpy
+  
 #+end_src
 
 In addition to that, it is important that =autopep8=, which is a script, can reach python or python3. For my configuration, =autopep8= looks for python this like this:
@@ -1185,7 +1532,8 @@ This is the standard python mode setup.
   (defun mrf/load-python-file-hook ()
      (message "Running python file hook")
      (python-mode)
-     (dap-mode)
+     (if (equal enable-dap t)
+        (dap-mode))
      (highlight-indentation-mode -1)
      (display-fill-column-indicator-mode 1))
 
@@ -1202,15 +1550,22 @@ This is the standard python mode setup.
      ;; Also important to set dap-python-executable during dap-mode config
      ;; (python-shell-interpreter "python3")
      ;; (eglot-ensure)
-     (dap-tooltip 1)
+     (if (equal enable-dap t)
+        (progn
+  	 (dap-tooltip 1)
+  	 (dap-ui-controls-mode 1)))
      (toolit-mode 1)
-     (dap-ui-controls-mode 1)
      :custom
      (python-shell-completion-native-enable nil)
      :bind ("C-c |" . (display-fill-column-indicator-mode 1)))
 
   (add-to-list 'auto-mode-alist '("\\.py\\'" . mrf/load-python-file-hook))
   (use-package blacken) ;Format Python file upon save.
+
+  (if (boundp 'python-shell-completion-native-disabled-interpreters)
+     (add-to-list 'python-shell-completion-native-disabled-interpreters "python3")
+     (setq python-shell-completion-native-disabled-interpreters '("python3")))
+
 
 #+end_src
 
@@ -1242,17 +1597,6 @@ Elpy is an Emacs package to bring powerful Python editing to Emacs.  It combines
 
 #+end_src
 
-*** RealGUD
-An extensible, modular GNU Emacs front-end for interacting with external debuggers, brought to you by Rocky Bernstein (@rocky) and Clément Pit-Claudel (@cpitclaudel).
-For now, we disable it since this script is using =Elpy= and =DAP=. We include this here as another option that can be used.
-
-#+begin_src emacs-lisp
-
-  (use-package realgud
-     :disabled) ;; Keep this around but right now we use DAP
-
-#+end_src
-
 *** Auto-pep 8
 autopep8 automatically formats Python code to conform to the `PEP 8` style guide.  It uses the pycodestyle_ utility to determine what parts of the code needs to be formatted.  autopep8 is capable of fixing most of the formatting issues_ that can be reported by pycodestyle. Refer to the [[IMPORTANT][IMPORTANT]] section above for possible issues when autopep8 is installed.
 
@@ -1277,6 +1621,39 @@ autopep8 automatically formats Python code to conform to the `PEP 8` style guide
 *** Python Keybinding
 #+begin_src emacs-lisp
 
+  ;; This is a helpful macro that is used to put double quotes around a word.
+  (defalias 'quote-word
+     (kmacro "\" M-d \" <left> C-y"))
+
+  (defalias 'quote-region
+     (kmacro "C-w \" \" <left> C-y <right>"))
+     
+
+  ;; (define-key python-mode-map (kbd "C-c ,") 'dap-hydra/body)
+  (general-define-key
+     :keymaps '(python-mode-map)
+     "C-c C-g"    'elpy-goto-definition-other-window
+     "C-c g"      'elpy-goto-definition
+     "C-c C-q"    'quote-region
+     "C-c q"      'quote-word)
+
+  (if (equal enable-dap t)
+     (general-define-key
+        :keymaps '(python-mode-map)
+        "C-c ."      'dap-hydra/body)
+     )
+
+  (if (equal enable-dape t)
+     (general-define-key
+        :keymaps '(python-mode-map typescript-ts-mode-map)
+        "C-c ."      'dape-hydra/body)
+     )
+
+#+end_src
+
+*** DAP-Hydra
+
+#+begin_src emacs-lisp :results none
   (defun mrf/end-debug-session ()
      "End the debug session and delete project Python buffers."
      (interactive)
@@ -1297,31 +1674,8 @@ autopep8 automatically formats Python code to conform to the `PEP 8` style guide
      (dap-ui-show-many-windows)
      (dap-debug))
 
-  ;; This is a helpful macro that is used to put double quotes around a word.
-  (defalias 'quote-word
-     (kmacro "\" M-d \" <left> C-y"))
-
-  (defalias 'quote-region
-     (kmacro "C-w \" \" <left> C-y <right>"))
-     
-
-  ;; (define-key python-mode-map (kbd "C-c ,") 'dap-hydra/body)
-  (general-define-key
-     :keymaps '(python-mode-map dap-ui-mode-map)
-     "C-c C-g"    'elpy-goto-definition-other-window
-     "C-c g"      'elpy-goto-definition
-     "C-c C-q"    'quote-region
-     "C-c q"      'quote-word
-     "C-c ."      'dap-hydra/body)
-
-
-#+end_src
-
-*** DAP-Hydra
-
-#+begin_src emacs-lisp :results none
-    (defhydra dap-hydra (:color pink :hint nil :foreign-keys run)
-      "
+  (defhydra dap-hydra (:color pink :hint nil :foreign-keys run)
+     "
     ^Stepping^          ^Switch^                 ^Breakpoints^          ^Debug^                     ^Eval
     ^^^^^^^^----------------------------------------------------------------------------------------------------------------
     _._: Next           _ss_: Session            _bb_: Toggle           _dd_: Debug                 _ee_: Eval
@@ -1334,43 +1688,43 @@ autopep8 automatically formats Python code to conform to the `PEP 8` style guide
                       _sS_: List sessions
                       _sR_: Session Repl
   "
-       ("n" dap-next)
-       ("i" dap-step-in)
-       ("o" dap-step-out)
-       ("." dap-next)
-       ("/" dap-step-in)
-       ("," dap-step-out)
-       ("c" dap-continue)
-       ("r" dap-restart-frame)
-       ("ss" dap-switch-session)
-       ("st" dap-switch-thread)
-       ("sf" dap-switch-stack-frame)
-       ("su" dap-up-stack-frame)
-       ("sd" dap-down-stack-frame)
-       ("sl" dap-ui-locals)
-       ("sb" dap-ui-breakpoints)
-       ("sR" dap-ui-repl)
-       ("sS" dap-ui-sessions)
-       ("bb" dap-breakpoint-toggle)
-       ("ba" dap-breakpoint-add)
-       ("bd" dap-breakpoint-delete)
-       ("bc" dap-breakpoint-condition)
-       ("bh" dap-breakpoint-hit-condition)
-       ("bl" dap-breakpoint-log-message)
-       ("dd" dap-debug)
-       ("dr" dap-debug-recent)
-       ("ds" dap-debug-restart)
-       ("dl" dap-debug-last)
-       ("de" dap-debug-edit-template)
-       ("ee" dap-eval)
-       ("ea" dap-ui-expressions-add)
-       ("er" dap-eval-region)
-       ("es" dap-eval-thing-at-point)
-       ("dx" mrf/end-debug-session)
-       ("dX" mrf/delete-all-debug-sessions)
-       ("x" nil "exit Hydra" :color yellow)
-       ("q" mrf/end-debug-session "quit" :color blue)
-       ("Q" mrf/delete-all-debug-sessions :color red))  
+     ("n" dap-next)
+     ("i" dap-step-in)
+     ("o" dap-step-out)
+     ("." dap-next)
+     ("/" dap-step-in)
+     ("," dap-step-out)
+     ("c" dap-continue)
+     ("r" dap-restart-frame)
+     ("ss" dap-switch-session)
+     ("st" dap-switch-thread)
+     ("sf" dap-switch-stack-frame)
+     ("su" dap-up-stack-frame)
+     ("sd" dap-down-stack-frame)
+     ("sl" dap-ui-locals)
+     ("sb" dap-ui-breakpoints)
+     ("sR" dap-ui-repl)
+     ("sS" dap-ui-sessions)
+     ("bb" dap-breakpoint-toggle)
+     ("ba" dap-breakpoint-add)
+     ("bd" dap-breakpoint-delete)
+     ("bc" dap-breakpoint-condition)
+     ("bh" dap-breakpoint-hit-condition)
+     ("bl" dap-breakpoint-log-message)
+     ("dd" dap-debug)
+     ("dr" dap-debug-recent)
+     ("ds" dap-debug-restart)
+     ("dl" dap-debug-last)
+     ("de" dap-debug-edit-template)
+     ("ee" dap-eval)
+     ("ea" dap-ui-expressions-add)
+     ("er" dap-eval-region)
+     ("es" dap-eval-thing-at-point)
+     ("dx" mrf/end-debug-session)
+     ("dX" mrf/delete-all-debug-sessions)
+     ("x" nil "exit Hydra" :color yellow)
+     ("q" mrf/end-debug-session "quit" :color blue)
+     ("Q" mrf/delete-all-debug-sessions :color red))  
 
  #+end_src
 
@@ -1416,56 +1770,6 @@ autopep8 automatically formats Python code to conform to the `PEP 8` style guide
 
 #+end_src
 
-*** Python Keybinding for Realgud
-Since Realgud is options (in our configuratrion), we add it's keybindings conditionally. *Note* that these keybindings are still compatible with =dap-mode= keybindings.
-
-#+begin_src emacs-lisp
-
-  ;;; =========================================================================
-  (if (package-installed-p 'realgud)
-     (general-def python-mode-map
-        "M-p" 'python-nav-backward-defun
-        "M-n" 'python-nav-forward-defun
-        "C-c p" 'elpy-goto-definition
-        "C-c h" 'elpy-doc
-        "C-c , j" 'realgud:cmd-jump
-        "C-c , k" 'realgud:cmd-kill
-        "C-c , s" 'realgud:cmd-step
-        "C-c , n" 'realgud:cmd-next
-        "C-c , q" 'realgud:cmd-quit
-        "C-c , F" 'realgud:window-bt
-        "C-c , U" 'realgud:cmd-until
-        "C-c , X" 'realgud:cmd-clear
-        "C-c , !" 'realgud:cmd-shell
-        "C-c , b" 'realgud:cmd-break
-        "C-c , f" 'realgud:cmd-finish
-        "C-c , D" 'realgud:cmd-delete
-        "C-c , +" 'realgud:cmd-enable
-        "C-c , R" 'realgud:cmd-restart
-        "C-c , -" 'realgud:cmd-disable
-        "C-c , B" 'realgud:window-brkpt
-        "C-c , c" 'realgud:cmd-continue
-        "C-c , e" 'realgud:cmd-eval-dwim
-        "C-c , Q" 'realgud:cmd-terminate
-        "C-c , T" 'realgud:cmd-backtrace
-        "C-c , h" 'realgud:cmd-until-here
-        "C-c , u" 'realgud:cmd-older-frame
-        "C-c , 4" 'realgud:cmd-goto-loc-hist-4
-        "C-c , 5" 'realgud:cmd-goto-loc-hist-5
-        "C-c , 6" 'realgud:cmd-goto-loc-hist-6
-        "C-c , 7" 'realgud:cmd-goto-loc-hist-7
-        "C-c , 8" 'realgud:cmd-goto-loc-hist-8
-        "C-c , 9" 'realgud:cmd-goto-loc-hist-9
-        "C-c , d" 'realgud:cmd-newer-frame
-        "C-c , RET" 'realgud:cmd-repeat-last
-        "C-c , E" 'realgud:cmd-eval-at-point
-        "C-c , I" 'realgud:cmdbuf-info-describe
-        "C-c , C-d" 'realgud:pdb
-        "C-c , C-f" 'realgud:flake8-goto-msg-line
-        "C-c , C-i" 'realgud:cmd-info-breakpoints))
-
-#+end_src
-
 *** Python Virtual Environment Support
 We use Pyvenv-auto is a package that automatically changes to the Python virtual environment based upon the project's directory.  pyvenv-auto looks at the root director of the project for a =.venv= or =venv= (and a few others)
 
@@ -1476,32 +1780,6 @@ We use Pyvenv-auto is a package that automatically changes to the Python virtual
      :config (message "Starting pyvenv-auto")
      :hook ((python-mode . pyvenv-auto-run)))
 
-#+end_src
-
-*** Pydoc
-#+begin_src emacs-lisp
-
-    (use-package pydoc-info
-       :ensure
-       :straight (pydoc-info :type git :host github :repo "emacsattic/pydoc-info"))
-
-    (info-lookup-add-help
-       :mode 'python-mode
-       :parse-rule 'pydoc-info-python-symbol-at-point
-       :doc-spec
-       '(("(python)Index" pydoc-info-lookup-transform-entry)
-           ("(sphinx)Index" pydoc-info-lookup-transform-entry)))
-
-    (use-package info-lookmore
-       :straight (info-lookmore :type git
-  		  :host github :repo "emacsmirror/info-lookmore"))
-    
-    (info-lookup-add-help
-       :mode 'python-mode
-       :regexp "[[:alnum:]_]+"
-       :doc-spec
-       '(("(python)Index" nil "")))
-      
 #+end_src
 
 
@@ -1528,49 +1806,6 @@ RGBDS is a compiler that has been around quite a long time (since 1997). It supp
      :straight (rgbds-mode
   		:type git :host github
   		:repo "japanoise/rgbds-mode"))
-
-#+end_src
-
-
-* Corfu
-Corfu enhances in-buffer completion with a small completion popup. The current candidates are shown in a popup below or above the point. The candidates can be selected by moving up and down. Corfu is the minimalistic in-buffer completion counterpart of the Vertico minibuffer UI.
-
-#+begin_src emacs-lisp :tangle no
-
-  ;;;; Code Completion
-  (use-package corfu
-     :disabled
-     :ensure
-     ;; Optional customizations
-     :custom
-     (corfu-cycle t)                 ; Allows cycling through candidates
-     (corfu-auto t)                  ; Enable auto completion
-     (corfu-auto-prefix 2)
-     (corfu-auto-delay 0.8)
-     (corfu-popupinfo-delay '(0.5 . 0.2))
-     (corfu-preview-current 'insert) ; insert previewed candidate
-     (corfu-preselect 'prompt)
-     (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
-     ;; Optionally use TAB for cycling, default is `corfu-complete'.
-     :bind (:map corfu-map
-              ("M-SPC"      . corfu-insert-separator)
-              ("TAB"        . corfu-next)
-              ([tab]        . corfu-next)
-              ("S-TAB"      . corfu-previous)
-              ([backtab]    . corfu-previous)
-              ("S-<return>" . corfu-insert)
-              ("RET"        . nil))
-
-     :init
-     (global-corfu-mode)
-     (corfu-history-mode)
-     (corfu-popupinfo-mode) ; Popup completion info
-     :config
-     (add-hook 'eshell-mode-hook
-        (lambda () (setq-local corfu-quit-at-boundary t
-                      corfu-quit-no-match t
-                      corfu-auto nil)
-           (corfu-mode))))
 
 #+end_src
 
@@ -2164,16 +2399,19 @@ While there is standard markdown support built into =org-mode=, this additional 
 ** Org-AI
 
 #+begin_src emacs-lisp
-  (use-package org-ai
-     :disabled
-     :straight (org-ai :type git
-  		:flavor melpa
-  		:files (:defaults "snippets" "org-ai-pkg.el")
-  		:host github :repo "rksm/org-ai")
-     :custom
-     (org-ai-openai-api-token "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"))
 
-  ;; (load "copilot")
+  (if (equal enable-org-ai t)
+     (use-package org-ai
+        :straight (org-ai :type git
+  		   :flavor melpa
+  		   :files (:defaults "snippets" "org-ai-pkg.el")
+  		   :host github :repo "rksm/org-ai")
+        :custom
+        (org-ai-openai-api-token "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")
+        ;; :config
+        ;; (load "copilot")
+        ))
+
 #+end_src
 
 
@@ -2230,18 +2468,18 @@ The following packages are some additional quality of life features.
 ** Golden Ratio
 #+begin_src emacs-lisp
 
-  (use-package golden-ratio
-     :disabled
-     :hook (after-init . golden-ratio-mode)
-     :custom
-     (golden-ratio-exclude-modes '(occur-mode
-  				   undo-tree-visualizer-mode
-  				   dap-ui-repl-mode
-  				   dap-mode
-  				   dap-ui-mode
-  				   dap-ui-many-windows-mode
-  				   inferior-python-mode)))
-  ;; (golden-ratio-auto-scale t))
+  (if (equal enable-golden-ratio t)
+     (use-package golden-ratio
+        :hook (after-init . golden-ratio-mode)
+        :custom
+        ;; (golden-ratio-auto-scale t)
+        (golden-ratio-exclude-modes '(occur-mode
+  				      undo-tree-visualizer-mode
+  				      dap-ui-repl-mode
+  				      dap-mode
+  				      dap-ui-mode
+  				      dap-ui-many-windows-mode
+  				      inferior-python-mode))))
 
 #+end_src
 
@@ -2269,7 +2507,7 @@ Dashboard is an extensible Emacs startup screen showing you what’s most import
   (use-package all-the-icons
      :if (display-graphic-p))
 
-  ;; Value of dashb oard-startup-banner can be
+  ;; Value of dashboard-startup-banner can be
   ;; - nil to display no banner
   ;; - 'official which displays the official emacs logo
   ;; - 'logo which displays an alternative emacs logo
@@ -2287,63 +2525,24 @@ Dashboard is an extensible Emacs startup screen showing you what’s most import
      :hook ((after-init     . dashboard-refresh-buffer)
             (dashboard-mode . mrf/dashboard-banner))
      :custom
-     (dashboard-items '((recents . 9)
-                          (bookmarks . 5)
-                          (projects . 5)))
+     (dashboard-items '((recents . 10)
+                        (bookmarks . 5)
+                        (projects . 5)))
+     (initial-buffer-choice (lambda () (get-buffer-create "*dashboard*")))
+     (dashboard-center-content t)
+     (dashboard-icon-type 'all-the-icons) ;; use `all-the-icons' package
+     (dashboard-display-icons-p t)
+     (dashboard-set-heading-icons t)
+     (dashboard-set-file-icons t)
      :config
      (dashboard-setup-startup-hook)
      (dashboard-open)
-     (setq dashboard-center-content t)
      (global-set-key (kbd "C-c d") 'dashboard-open))
 
 #+end_src
 
-** Autocomplete
-
-Auto-Complete is an intelligent auto-completion extension for Emacs. It extends the standard Emacs completion interface and provides an environment that allows users to concentrate more on their own work.
-
-#+begin_src emacs-lisp
-
-  ;;; ------------------------------------------------------------------------
-
-  (defvar ac-directory (unless (file-exists-p "auto-complete")
-                       (make-directory "auto-complete")))
-  (add-to-list 'load-path ac-directory)
-
-  (require 'auto-complete)
-  (ac-config-default)
-
-  (global-auto-complete-mode 1)
-  (setq-default ac-sources '(ac-source-pycomplete
-                             ac-source-yasnippet
-                             ac-source-abbrev
-                             ac-source-dictionary
-                             ac-source-words-in-same-mode-buffers))
-
-  ; hack to fix ac-sources after pycomplete.el breaks it
-  (add-hook 'python-mode-hook
-            #'(lambda ()
-               (setq ac-sources '(ac-source-pycomplete
-                                  ac-source-yasnippet
-                                  ac-source-abbrev
-                                  ac-source-dictionary
-                                  ac-source-words-in-same-mode-buffers))))
-
-  ;; from http://truongtx.me/2013/01/06/config-yasnippet-and-autocomplete-on-emacs/
-  ; set the trigger key so that it can work together with yasnippet on
-  ; tab key, if the word exists in yasnippet, pressing tab will cause
-  ; yasnippet to activate, otherwise, auto-complete will
-  (ac-set-trigger-key "TAB")
-  (ac-set-trigger-key "<tab>")
-
-
-  ;; from http://blog.deadpansincerity.com/2011/05/setting-up-emacs-as-a-javascript-editing-environment-for-fun-and-profit/
-  ; Start auto-completion after 2 characters of a word
-  (setq ac-auto-start 2)
-  ; case sensitivity is important when finding matches
-  (setq ac-ignore-case nil)
-
-#+end_src
+#+RESULTS:
+| (lambda nil (display-line-numbers-mode 0)) | mrf/dashboard-banner |
 
 ** Undo Tree
 A great package that allows moving up and down the undo-redo tree.
@@ -2620,14 +2819,14 @@ GNU Hyperbole (pronounced Ga-new Hi-per-bo-lee), or just Hyperbole, is like Mark
 ** Centaur Tabs
 #+begin_src emacs-lisp
 
-  (use-package centaur-tabs
-     :init
-     :disabled
-     ;; Set the style to rounded with icons (setq centaur-tabs-style "bar")
-     (setq centaur-tabs-style "bar")
-     (setq centaur-tabs-set-icons t)
-     :config ;; Enable centaur-tabs
-     (centaur-tabs-mode nil))
+  (if (equal enable-centaur-tabs t)
+     (use-package centaur-tabs
+        :init
+        ;; Set the style to rounded with icons (setq centaur-tabs-style "bar")
+        (setq centaur-tabs-style "bar")
+        (setq centaur-tabs-set-icons t)
+        :config ;; Enable centaur-tabs
+        (centaur-tabs-mode nil)))
 
 #+end_src
 
@@ -2911,29 +3110,27 @@ These functions are used to configure the main frame font size. Based upon a mon
 
 ** Supress some startup warnings
 
-  #+begin_src emacs-lisp
+#+begin_src emacs-lisp
 
-      ;;; ===========================================================================
-    (custom-set-variables
-       ;; custom-set-variables was added by Custom.
-       ;; If you edit it by hand, you could mess it up, so be careful.
-       ;; Your init file should contain only one such instance.
-       ;; If there is more than one, they won't work right.
-        '(warning-suppress-log-types
-    	'(((python python-shell-completion-native-turn-on-maybe))
-    	    ((package reinitialization))
-    	    (use-package)
-    	    (python-mode)
-    	    (package-initialize))))
-
-      ;;; init.el ends here.
-    (custom-set-faces
-       ;; custom-set-faces was added by Custom.
-       ;; If you edit it by hand, you could mess it up, so be careful.
-       ;; Your init file should contain only one such instance.
-       ;; If there is more than one, they won't work right.
-       )
-
-    ;;  (dashboard-open)
+  ;;; ===========================================================================
+  (custom-set-variables
+     ;; custom-set-variables was added by Custom.
+     ;; If you edit it by hand, you could mess it up, so be careful.
+     ;; Your init file should contain only one such instance.
+     ;; If there is more than one, they won't work right.
+     '(warning-suppress-log-types
+         '(((python python-shell-completion-native-turn-on-maybe))
+  	   ((package reinitialization))
+  	   (treesit)
+  	   (use-package)
+  	   (python-mode)
+  	   (package-initialize))))
+    ;;; init.el ends here.
+  (custom-set-faces
+     ;; custom-set-faces was added by Custom.
+     ;; If you edit it by hand, you could mess it up, so be careful.
+     ;; Your init file should contain only one such instance.
+     ;; If there is more than one, they won't work right.
+     )
 
 #+end_src

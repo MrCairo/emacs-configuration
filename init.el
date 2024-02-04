@@ -1,3 +1,10 @@
+(setq enable-dap 0            ;; Debug Adapter Protocol 
+      enable-dape t           ;; DAP for Emacs. Can't do both
+      enable-corfu 0          ;; Alternative to Ivy/Swiper/Company 
+      enable-org-ai 0         ;; Interface to OpenAI
+      enable-centaur-tabs 0   ;; Top Tabs for files
+      enable-golden-ratio 0)  ;; Re-size active frame to golden ratio
+
 (defvar bootstrap-version)
 (let ((bootstrap-file
        (expand-file-name
@@ -15,32 +22,6 @@
   (load bootstrap-file nil 'nomessage))
 
 (setq straight-use-package-by-default t)
-
-;;; =========================================================================
-;;; startup
-;;; The default is 800 kilobytes.  Measured in bytes.
-;;; Process performance tuning
-
-(add-hook 'after-init-hook
-   (lambda ()
-      ;; warn when opening files bigger than 100MB
-      (setq large-file-warning-threshold 100000000)
-      ;; reduce the frequency of garbage collection by making it happen on
-      ;; each 50MB of allocated data (the default is on every 0.76MB)
-      (setq gc-cons-threshold 50000000)))
-
-(setq read-process-output-max (* 4 1024 1024))
-(setq process-adaptive-read-buffering nil)
-
-(defun mrf/display-startup-time ()
-   "Calculate and display startup time."
-   (message "Emacs loaded in %s with %d garbage collections."
-      (format "%.2f seconds"
-  	 (float-time
-  	    (time-subtract after-init-time before-init-time)))
-      gcs-done))
-
-(add-hook 'emacs-startup-hook #'mrf/display-startup-time)
 
 ;;; -------------------------------------------------------------------------
 ;;; Use shell paths
@@ -144,10 +125,44 @@
 
 (use-package auto-complete
   :straight (auto-complete :type git
-			   :flavor melpa
-			   :files ("*.el" "dict" "auto-complete-pkg.el")
-			   :host github
-			   :repo "auto-complete/auto-complete"))
+  			   :flavor melpa
+  			   :files ("*.el" "dict" "auto-complete-pkg.el")
+  			   :host github
+  			   :repo "auto-complete/auto-complete"))
+
+  (defvar ac-directory (unless (file-exists-p "auto-complete")
+                       (make-directory "auto-complete")))
+  (add-to-list 'load-path ac-directory)
+
+(global-auto-complete-mode 1)
+(setq-default ac-sources '(ac-source-pycomplete
+                           ac-source-yasnippet
+                           ac-source-abbrev
+                           ac-source-dictionary
+                           ac-source-words-in-same-mode-buffers))
+
+; hack to fix ac-sources after pycomplete.el breaks it
+(add-hook 'python-mode-hook
+          #'(lambda ()
+             (setq ac-sources '(ac-source-pycomplete
+                                ac-source-yasnippet
+                                ac-source-abbrev
+                                ac-source-dictionary
+                                ac-source-words-in-same-mode-buffers))))
+
+;; from http://truongtx.me/2013/01/06/config-yasnippet-and-autocomplete-on-emacs/
+;; set the trigger key so that it can work together with yasnippet on
+;; tab key, if the word exists in yasnippet, pressing tab will cause
+;; yasnippet to activate, otherwise, auto-complete will
+(ac-set-trigger-key "TAB")
+(ac-set-trigger-key "<tab>")
+
+
+;; from http://blog.deadpansincerity.com/2011/05/setting-up-emacs-as-a-javascript-editing-environment-for-fun-and-profit/
+;; Start auto-completion after 2 characters of a word
+(setq ac-auto-start 2)
+;; case sensitivity is important when finding matches
+(setq ac-ignore-case nil)
 
 (use-package esup
    :straight (esup :type git :flavor melpa :host github :repo "jschaf/esup"))
@@ -246,10 +261,36 @@
 ;; (load-theme 'kaolin-dark t)
 ;; (load-theme 'sanityinc-tomorrow-eighties t)
 
-;;; -------------------------------------------------------------------------
-;;; Common Settings
-
 (show-paren-mode 1)
+(setq inhibit-startup-message t)     ;; Hide the startup message
+(setq visible-bell t)                ;; Set up the visible bell
+(save-place-mode 1)                  ;; Remember where we were last editing a file.
+(setq backup-inhibited t)            ;; disable backup (No ~ tilde files)
+(setq auto-save-default nil)         ;; disable auto save
+(column-number-mode)
+(global-display-line-numbers-mode 1) ;; Line numbers appear everywhere
+(setq-default fill-column 80)        ;; number of characters until the fill column
+(setq lisp-indent-offset '3)         ;; emacs lisp tab size
+
+;; each line of text gets one line on the screen (i.e., text will run
+;; off the left instead of wrapping around onto a new line)
+(setq-default truncate-lines 1)
+
+(global-prettify-symbols-mode 1)     ;; Display pretty symbols (i.e. λ = lambda)
+(setq truncate-partial-width-windows 1) ;; truncate lines even in partial-width windows
+
+(use-package evil-nerd-commenter
+   :bind ("M-/" . evilnc-comment-or-uncomment-lines))
+
+(use-package rainbow-delimiters
+  :config
+  (rainbow-delimiters-mode))
+
+(setq dired-listing-switches "-agho --group-directories-first")
+(setq dired-dwim-target t)
+(setq pixel-scroll-mode t)           ;; enable smooth scrolling.
+
+;;; Macintosh specific configurations.
 
 (defconst *is-a-mac* (eq system-type 'darwin))
 (when (eq system-type 'darwin)
@@ -258,40 +299,26 @@
          mac-command-modifier 'none
          mac-option-modifier 'meta))
 
-(setq inhibit-startup-message t)  ;; Hide the startup message
-(setq visible-bell t)             ;; Set up the visible bell
+(use-package emacs
+  :init
+  ;; Add prompt indicator to `completing-read-multiple'.
+  ;; We display [CRM<separator>], e.g., [CRM,] if the separator is a comma.
+  (defun crm-indicator (args)
+    (cons (format "[CRM%s] %s"
+                  (replace-regexp-in-string
+                   "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+                   crm-separator)
+                  (car args))
+          (cdr args)))
+  (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
 
-(save-place-mode 1)          ;; Remember where we were last editing a file.
+  ;; Do not allow the cursor in the minibuffer prompt
+  (setq minibuffer-prompt-properties
+        '(read-only t cursor-intangible t face minibuffer-prompt))
+  (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
-(setq backup-inhibited t)    ;; disable backup
-(setq auto-save-default nil) ;; disable auto save
-
-(column-number-mode)
-(global-display-line-numbers-mode 1) ;; Line numbers appear everywhere
-
-;; number of characters until the fill column
-(setq-default fill-column 80)
-
-;; emacs lisp tab size
-(setq lisp-indent-offset '3)
-
-;; each line of text gets one line on the screen (i.e., text will run
-;; off the left instead of wrapping around onto a new line)
-(setq-default truncate-lines 1)
-
-(global-prettify-symbols-mode 1) ;; Display pretty symbols (i.e. λ = lambda)
-
-;; truncate lines even in partial-width windows
-(setq truncate-partial-width-windows 1)
-
-(use-package evil-nerd-commenter
-   :bind ("M-/" . evilnc-comment-or-uncomment-lines))
-
-;;; (use-package treemacs-all-the-icons)
-
-(use-package rainbow-delimiters
-  :config
-  (rainbow-delimiters-mode))
+  ;; Enable recursive minibuffers
+  (setq enable-recursive-minibuffers t))
 
 (use-package general
    :straight t)
@@ -302,16 +329,6 @@
 
 (general-define-key
    "C-x C-j" 'dired-jump)
-
-(setq dired-listing-switches "-agho --group-directories-first")
-(setq dired-dwim-target t)
-
-(if (boundp 'python-shell-completion-native-disabled-interpreters)
-   (add-to-list 'python-shell-completion-native-disabled-interpreters "python3")
- (setq python-shell-completion-native-disabled-interpreters '("python3")))
-
-;;; smooth scrolling.
-(setq pixel-scroll-mode t)
 
 ;;; -------------------------------------------------------------------------
 ;;; Automatic Package Updates
@@ -532,6 +549,178 @@
 
 (use-package eglot)
 
+;;; =========================================================================
+(if (package-installed-p 'realgud)
+   (general-def python-mode-map
+      "M-p" 'python-nav-backward-defun
+      "M-n" 'python-nav-forward-defun
+      "C-c p" 'elpy-goto-definition
+      "C-c h" 'elpy-doc
+      "C-c , j" 'realgud:cmd-jump
+      "C-c , k" 'realgud:cmd-kill
+      "C-c , s" 'realgud:cmd-step
+      "C-c , n" 'realgud:cmd-next
+      "C-c , q" 'realgud:cmd-quit
+      "C-c , F" 'realgud:window-bt
+      "C-c , U" 'realgud:cmd-until
+      "C-c , X" 'realgud:cmd-clear
+      "C-c , !" 'realgud:cmd-shell
+      "C-c , b" 'realgud:cmd-break
+      "C-c , f" 'realgud:cmd-finish
+      "C-c , D" 'realgud:cmd-delete
+      "C-c , +" 'realgud:cmd-enable
+      "C-c , R" 'realgud:cmd-restart
+      "C-c , -" 'realgud:cmd-disable
+      "C-c , B" 'realgud:window-brkpt
+      "C-c , c" 'realgud:cmd-continue
+      "C-c , e" 'realgud:cmd-eval-dwim
+      "C-c , Q" 'realgud:cmd-terminate
+      "C-c , T" 'realgud:cmd-backtrace
+      "C-c , h" 'realgud:cmd-until-here
+      "C-c , u" 'realgud:cmd-older-frame
+      "C-c , 4" 'realgud:cmd-goto-loc-hist-4
+      "C-c , 5" 'realgud:cmd-goto-loc-hist-5
+      "C-c , 6" 'realgud:cmd-goto-loc-hist-6
+      "C-c , 7" 'realgud:cmd-goto-loc-hist-7
+      "C-c , 8" 'realgud:cmd-goto-loc-hist-8
+      "C-c , 9" 'realgud:cmd-goto-loc-hist-9
+      "C-c , d" 'realgud:cmd-newer-frame
+      "C-c , RET" 'realgud:cmd-repeat-last
+      "C-c , E" 'realgud:cmd-eval-at-point
+      "C-c , I" 'realgud:cmdbuf-info-describe
+      "C-c , C-d" 'realgud:pdb
+      "C-c , C-f" 'realgud:flake8-goto-msg-line
+      "C-c , C-i" 'realgud:cmd-info-breakpoints))
+
+(require 'jsonrpc)
+
+(if (equal enable-dape t)
+   (progn
+      (use-package dape
+       :after (jsonrpc)
+       ;; To use window configuration like gud (gdb-mi)
+       ;; :init
+       ;; (setq dape-buffer-window-arrangement 'gud)
+       :custom
+       (dape-buffer-window-arrangement 'right)  ;; Info buffers to the right
+       ;; To not display info and/or buffers on startup
+       ;; (remove-hook 'dape-on-start-hooks 'dape-info)
+       ;; (remove-hook 'dape-on-start-hooks 'dape-repl)
+
+       ;; To display info and/or repl buffers on stopped
+       ;; (add-hook 'dape-on-stopped-hooks 'dape-info)
+       ;; (add-hook 'dape-on-stopped-hooks 'dape-repl)
+
+       ;; By default dape uses gdb keybinding prefix
+       ;; If you do not want to use any prefix, set it to nil.
+       ;; (setq dape-key-prefix "\C-x\C-a")
+
+       ;; Kill compile buffer on build success
+       ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
+
+       ;; Save buffers on startup, useful for interpreted languages
+       ;; (add-hook 'dape-on-start-hooks
+       ;;           (defun dape--save-on-start ()
+       ;;             (save-some-buffers t t)))
+
+       ;; Projectile users
+       ;; (setq dape-cwd-fn 'projectile-project-root)
+       ;; :straight (dape :type git
+       ;; 	      :host github :repo "emacs-straight/dape"
+       ;; 	      :files ("*" (:exclude ".git")))
+       )
+      )
+   )
+
+(setq mrf/vscode-js-debug-dir (file-name-concat user-emacs-directory "dape/vscode-js-debug"))
+
+(defun mrf/install-vscode-js-debug ()
+   "Run installation procedure to install JS debugging support"
+   (interactive)
+   (mkdir mrf/vscode-js-debug-dir t)
+   (let ((default-directory (expand-file-name mrf/vscode-js-debug-dir)))
+
+      (vc-git-clone "https://github.com/microsoft/vscode-js-debug.git" "." nil)
+      (message "git repository created")
+      (call-process "npm" nil "*snam-install*" t "install")
+      (message "npm dependencies installed")
+      (call-process "npx" nil "*snam-install*" t "gulp" "dapDebugServer")
+      (message "vscode-js-debug installed")))
+
+(if (equal enable-dape t)
+   (add-to-list 'dape-configs
+      `(vscode-js-node
+  	modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
+  	host "localhost"
+  	port 8123
+  	command "node"
+  	command-cwd ,(file-name-concat mrf/vscode-js-debug-dir "dist")
+  	command-args ("src/dapDebugServer.js" "8123")
+  	:type "pwa-node"
+  	:request "launch"
+  	:cwd dape-cwd-fn
+  	:program dape--default-cwd
+  	:outputCapture "console"
+  	:sourceMapRenames t
+  	:pauseForSourceMap nil
+  	:enableContentValidation t
+  	:autoAttachChildProcesses t
+  	:console "internalConsole"
+  	:killBehavior "forceful")))
+
+(defun mrf/dape-end-debug-session ()
+   "End the debug session and delete project Python buffers."
+   (interactive)
+   (dape-quit))
+
+(defun mrf/dape-delete-all-debug-sessions ()
+   "End the debug session and delete project Python buffers and all breakpoints."
+   (interactive)
+   (dape-breakpoint-remove-all)
+   (mrf/dape-end-debug-session))
+
+(defhydra dape-hydra (:color pink :hint nil :foreign-keys run)
+   "
+  ^Stepping^          ^Switch^                 ^Breakpoints^          ^Debug^                     ^Eval
+  ^^^^^^^^----------------------------------------------------------------------------------------------------------------
+  _._: Next           _st_: Thread            _bb_: Toggle           _dd_: Debug                 _ee_: Eval Expression
+  _/_: Step in        _si_: Info              _bd_: Delete           _dw_: Watch dwim
+  _,_: Step out       _sf_: Stack Frame       _ba_: Add              _dx_: end session
+  _c_: Continue       _su_: Up stack frame    _bc_: Set condition    _dX_: end all sessions
+  _r_: Restart frame  _sd_: Down stack frame  _bl_: Set log message
+  _Q_: Disconnect     _sR_: Session Repl
+                      _sU_: Info Update
+
+"
+         ("n" dape-next)
+         ("i" dape-step-in)
+         ("o" dape-step-out)
+         ("." dape-next)
+         ("/" dape-step-in)
+         ("," dape-step-out)
+         ("c" dape-continue)
+         ("r" dape-restart)
+         ("si" dape-info)
+         ("st" dape-select-thread)
+         ("sf" dape-select-stack)
+         ("su" dape-stack-select-up)
+         ("sU" dape-info-update)
+         ("sd" dape-stack-select-down)
+         ("sR" dape-repl)
+         ("bb" dape-breakpoint-toggle)
+         ("ba" dape--breakpoint-place)
+         ("bd" dape-breakpoint-remove-at-point)
+         ("bc" dape-breakpoint-expression)
+         ("bl" dape-breakpoint-log)
+         ("dd" dape)
+         ("dw" dape-watch-dwim)
+         ("ee" dape-evaluate-expression)
+         ("dx" mrf/dape-end-debug-session)
+         ("dX" mrf/dape-delete-all-debug-sessions)
+         ("x" nil "exit Hydra" :color yellow)
+         ("q" mrf/dape-end-debug-session "quit" :color blue)
+         ("Q" mrf/dape-delete-all-debug-sessions :color red))
+
 ;;; ------------------------------------------------------------------------
 ;;; Debug Adapter Protocol
 ;;   (straight-use-package
@@ -541,24 +730,29 @@
 ;; 	 :host github
 ;; 	 :repo "emacs-lsp/dap-mode"))
 
-(use-package dap-mode
-   :straight (dap-mode :type git
-		:flavor melpa
-		:files (:defaults "icons" "dap-mode-pkg.el")
-		:host github
-		:repo "emacs-lsp/dap-mode")
-   ;; Uncomment the config below if you want all UI panes to be hidden by default!
-   ;; :custom
-   ;; (lsp-enable-dap-auto-configure nil)
-   :config
-   (message "DAP mode loaded.")
-   (dap-ui-mode 1)
-   ;; (setq lsp-enable-dap-auto-configure nil)
-   (setq dap-python-executable "python3") ;; Otherwise it looks for 'python' else error.
-   :commands
-   dap-debug
-   :custom
-   (dap-auto-configure-features '(locals repl)))
+(if (equal enable-dap t)
+   (progn
+      (use-package dap-mode
+       :straight (dap-mode :type git
+  		    :flavor melpa
+  		    :files (:defaults "icons" "dap-mode-pkg.el")
+  		    :host github
+  		    :repo "emacs-lsp/dap-mode")
+       ;; Uncomment the config below if you want all UI panes to be hidden by default!
+       ;; :custom
+       ;; (lsp-enable-dap-auto-configure nil)
+       :config
+       (message "DAP mode loaded.")
+       (dap-ui-mode 1)
+       ;; (setq lsp-enable-dap-auto-configure nil)
+       (setq dap-python-executable "python3") ;; Otherwise it looks for 'python' else error.
+       :commands
+       dap-debug
+       :custom
+       (dap-auto-configure-features '(locals repl))
+       )
+      )
+   )
 
 (setq dap-python-debugger 'debugpy)
 
@@ -568,25 +762,30 @@
 ;;; ------------------------------------------------------------------------
 ;;; DAP for Python
 
-(use-package dap-python
-   :straight (dap-python :type git :host github :repo "emacs-lsp/dap-mode")
-   :after (dap-mode)
-   :config
-   (dap-register-debug-template "Python :: Run file from project directory"
-      (list :type "python"
-	 :args ""
-	 :cwd nil
-	 :module nil
-	 :program nil
-	 :request "launch"))
-   (dap-register-debug-template "Python :: Run file (buffer)"
-      (list :type "python"
-	 :args ""
-	 :cwd nil
-	 :module nil
-	 :program nil
-	 :request "launch"
-	 :name "Python :: Run file (buffer)")))
+(if (equal enable-dap t)
+   (progn
+      (use-package dap-python
+       :straight (dap-python :type git :host github :repo "emacs-lsp/dap-mode")
+       :after (dap-mode)
+       :config
+       (dap-register-debug-template "Python :: Run file from project directory"
+  	  (list :type "python"
+  	     :args ""
+  	     :cwd nil
+  	     :module nil
+  	     :program nil
+  	     :request "launch"))
+       (dap-register-debug-template "Python :: Run file (buffer)"
+  	  (list :type "python"
+  	     :args ""
+  	     :cwd nil
+  	     :module nil
+  	     :program nil
+  	     :request "launch"
+  	     :name "Python :: Run file (buffer)"))
+       )
+      )
+   )
 
 ;;; ------------------------------------------------------------------------
 ;;; DAP for NodeJS
@@ -596,27 +795,30 @@
    (require 'dap-node)
    (unless (file-exists-p dap-node-debug-path) (dap-node-setup)))
 
-(use-package dap-node
- :after (dap-mode)
- :straight (dap-node :type git
-  	      :flavor melpa
-  	      :files (:defaults "icons" "dap-mode-pkg.el")
-  	      :host github
-  	      :repo "emacs-lsp/dap-mode")
- :config
-   (require 'dap-firefox)
-   ;; (dap-register-debug-template
-   ;;    "Launch index.ts"
-   ;;    (list :type "node"
-   ;; 	 :request "launch"
-   ;; 	 :program "${workspaceFolder}/index.ts"
-   ;; 	 :dap-compilation "npx tsc index.ts --outdir dist --sourceMap true"
-   ;; 	 :outFiles (list "${workspaceFolder}/dist/**/*.js")
-   ;; 	 :name "Launch index.ts"))
+(if (equal enable-dap t)
+   (progn
+      (use-package dap-node
+       :after (dap-mode)
+       :straight (dap-node :type git
+  		    :flavor melpa
+  		    :files (:defaults "icons" "dap-mode-pkg.el")
+  		    :host github
+  		    :repo "emacs-lsp/dap-mode")
+       :config
+       (require 'dap-firefox)
+       ;; (dap-register-debug-template
+       ;;    "Launch index.ts"
+       ;;    (list :type "node"
+       ;; 	 :request "launch"
+       ;; 	 :program "${workspaceFolder}/index.ts"
+       ;; 	 :dap-compilation "npx tsc index.ts --outdir dist --sourceMap true"
+       ;; 	 :outFiles (list "${workspaceFolder}/dist/**/*.js")
+       ;; 	 :name "Launch index.ts"))
+       )
+      (add-hook 'typescript-mode-hook 'my-setup-dap-node)
+      (add-hook 'javascript-mode-hook 'my-setup-dap-node)
+      )
    )
-
-(add-hook 'typescript-mode-hook 'my-setup-dap-node)
-(add-hook 'javascript-mode-hook 'my-setup-dap-node)
 
 (use-package hydra
    :straight (hydra :type git
@@ -628,18 +830,11 @@
 ;;; ------------------------------------------------------------------------
 ;;; Swiper and IVY mode
 
-(use-package swiper
-   :straight (swiper :type git
-  		:flavor melpa
-  		:files ("swiper.el" "swiper-pkg.el")
-  		:host github
-  		:repo "abo-abo/swiper"))
-
 (use-package ivy
    :diminish
    :bind (("C-s" . swiper)
   	  :map ivy-minibuffer-map
-  	  ("TAB" . ivy-alt-done)
+  	  ;;; ("TAB" . ivy-alt-done)
   	  ("C-l" . ivy-alt-done)
   	  ("C-j" . ivy-next-line)
   	  ("C-k" . ivy-previous-line)
@@ -656,18 +851,25 @@
 
 (use-package ivy-rich
    :after ivy
-  :straight (ivy-rich :type git :flavor melpa :host github :repo "Yevgnen/ivy-rich")
-  :init
-  (ivy-rich-mode 1))
+   :straight (ivy-rich :type git :flavor melpa :host github :repo "Yevgnen/ivy-rich")
+   :init
+   (ivy-rich-mode 1))
+
+(use-package ivy-yasnippet
+   :straight (ivy-yasnippet :type git :flavor melpa :host github :repo "mkcms/ivy-yasnippet"))
+
+(use-package swiper
+   :straight (swiper :type git
+  		:flavor melpa
+  		:files ("swiper.el" "swiper-pkg.el")
+  		:host github
+  		:repo "abo-abo/swiper"))
 
 (use-package counsel
-   ;; :straight (counsel :type git
-   ;; 		:flavor melpa
-   ;; 		:files ("counsel.el" "counsel-pkg.el")
-   ;; 		:host github :repo "abo-abo/swiper")
+   :straight t
    :bind (("C-M-j" . 'counsel-switch-buffer)
-  	  :map minibuffer-local-map
-  	  ("C-r" . 'counsel-minibuffer-history))
+    	:map minibuffer-local-map
+    	("C-r" . 'counsel-minibuffer-history))
    :custom
    (counsel-linux-app-format-function #'counsel-linux-app-format-function-name-only)
    :config
@@ -678,12 +880,48 @@
   :custom
   (ivy-prescient-enable-filtering nil)
   :config
-  ;; Uncomment the following line to have sorting remembered across sessions!
   (prescient-persist-mode 1)
   (ivy-prescient-mode 1))
 
-(use-package ivy-yasnippet
-   :straight (ivy-yasnippet :type git :flavor melpa :host github :repo "mkcms/ivy-yasnippet"))
+;;;; Code Completion
+(if (equal enable-corfu t)
+   (use-package corfu
+      ;; Optional customizations
+      :custom
+      (corfu-cycle t)                 ; Allows cycling through candidates
+      (corfu-auto t)                  ; Enable auto completion
+      (corfu-auto-prefix 2)
+      (corfu-auto-delay 0.8)
+      (corfu-popupinfo-delay '(0.5 . 0.2))
+      (corfu-preview-current 'insert) ; insert previewed candidate
+      (corfu-preselect 'prompt)
+      (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
+      ;; Optionally use TAB for cycling, default is `corfu-complete'.
+      :bind (:map corfu-map
+               ("M-SPC"      . corfu-insert-separator)
+               ("TAB"        . corfu-next)
+               ([tab]        . corfu-next)
+               ("S-TAB"      . corfu-previous)
+               ([backtab]    . corfu-previous)
+               ("S-<return>" . corfu-insert)
+               ("RET"        . nil))
+
+      :init
+      (global-corfu-mode)
+      (corfu-history-mode)
+      (corfu-popupinfo-mode) ; Popup completion info
+      :config
+      (add-hook 'eshell-mode-hook
+       (lambda () (setq-local corfu-quit-at-boundary t
+                  corfu-quit-no-match t
+                  corfu-auto nil)
+            (corfu-mode)))))
+
+(use-package orderless
+  :straight t
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles basic partial-completion)))))
 
 (defun mrf/tree-sitter-setup ()
    (tree-sitter-hl-mode t)
@@ -717,13 +955,27 @@
 
 ;;; -----------------------------------------------------------------
 
-(use-package typescript-ts-mode
-   :after (dap-mode)
-   :mode "\\.ts\\'"
-   :hook (typescript-ts-mode . lsp-deferred)
-   :config
-   (setq typescript-indent-level 4)
-   (dap-node-setup))
+(if (equal enable-dap t)
+   (use-package typescript-ts-mode
+      ;; :after (dap-mode)
+      :mode "\\.ts\\'"
+      :hook (typescript-ts-mode . lsp-deferred)
+      :config
+      (setq typescript-indent-level 4)
+      (dap-node-setup)))
+
+(if (equal enable-dape t)
+   (use-package typescript-ts-mode
+      ;; :after (dape-mode)
+      :mode "\\.ts\\'"
+      :hook (typescript-ts-mode . lsp-deferred)
+      :config
+      (general-define-key
+       :keymaps '(typescript-ts-mode-map)
+       "C-c ." 'dape-hydra/body)
+      (setq typescript-indent-level 4)))
+
+(add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 
 (defun mrf/load-js-file-hook ()
    (message "Running JS file hook")
@@ -732,16 +984,19 @@
    (dap-firefox-setup)
    (highlight-indentation-mode -1))
 
-(use-package js2-mode
-   :straight (js2-mode :type git :flavor melpa :host github :repo "mooz/js2-mode")
-   :custom
-   (js-indent-level 2)
-   (dap-firefox-debug-program
-      '("node" "/Users/strider/.emacs.d.mitchorg/.extension/vscode/firefox-devtools.vscode-firefox-debug/extension/dist/adapter.bundle.js"))
-   :init
-   (require 'dap-firefox))
-
-(add-to-list 'auto-mode-alist '("\\.[m]js\\'" . mrf/load-js-file-hook))
+(if (equal enable-dap t)
+   (progn
+      (use-package js2-mode
+       :straight (js2-mode :type git :flavor melpa :host github :repo "mooz/js2-mode")
+       :custom
+       (js-indent-level 2)
+       (dap-firefox-debug-program
+  	  '("node" "/Users/strider/.emacs.d.mitchorg/.extension/vscode/firefox-devtools.vscode-firefox-debug/extension/dist/adapter.bundle.js"))
+       :init
+       (require 'dap-firefox))
+      (add-to-list 'auto-mode-alist '("\\.[m]js\\'" . mrf/load-js-file-hook))
+      )
+   )
 
 ;;; -----------------------------------------------------------------
 
@@ -794,7 +1049,8 @@
 (defun mrf/load-python-file-hook ()
    (message "Running python file hook")
    (python-mode)
-   (dap-mode)
+   (if (equal enable-dap t)
+      (dap-mode))
    (highlight-indentation-mode -1)
    (display-fill-column-indicator-mode 1))
 
@@ -811,15 +1067,21 @@
    ;; Also important to set dap-python-executable during dap-mode config
    ;; (python-shell-interpreter "python3")
    ;; (eglot-ensure)
-   (dap-tooltip 1)
+   (if (equal enable-dap t)
+      (progn
+       (dap-tooltip 1)
+       (dap-ui-controls-mode 1)))
    (toolit-mode 1)
-   (dap-ui-controls-mode 1)
    :custom
    (python-shell-completion-native-enable nil)
    :bind ("C-c |" . (display-fill-column-indicator-mode 1)))
 
 (add-to-list 'auto-mode-alist '("\\.py\\'" . mrf/load-python-file-hook))
 (use-package blacken) ;Format Python file upon save.
+
+(if (boundp 'python-shell-completion-native-disabled-interpreters)
+   (add-to-list 'python-shell-completion-native-disabled-interpreters "python3")
+   (setq python-shell-completion-native-disabled-interpreters '("python3")))
 
 ;;; ------------------------------------------------------------------------
  (use-package elpy
@@ -842,9 +1104,6 @@
    (setq elpy-modules (delq 'elpy-module-flymake elpy-modules))
    :hook (elpy-mode . flycheck-mode))
 
-(use-package realgud
-   :disabled) ;; Keep this around but right now we use DAP
-
 (use-package py-autopep8
    :straight (py-autopep8 :type git
         	:flavor melpa
@@ -858,6 +1117,34 @@
       	  :flavor melpa
     	    :host github
   	      :repo "pythonic-emacs/blacken"))
+
+;; This is a helpful macro that is used to put double quotes around a word.
+(defalias 'quote-word
+   (kmacro "\" M-d \" <left> C-y"))
+
+(defalias 'quote-region
+   (kmacro "C-w \" \" <left> C-y <right>"))
+
+
+;; (define-key python-mode-map (kbd "C-c ,") 'dap-hydra/body)
+(general-define-key
+   :keymaps '(python-mode-map)
+   "C-c C-g"    'elpy-goto-definition-other-window
+   "C-c g"      'elpy-goto-definition
+   "C-c C-q"    'quote-region
+   "C-c q"      'quote-word)
+
+(if (equal enable-dap t)
+   (general-define-key
+      :keymaps '(python-mode-map)
+      "C-c ."      'dap-hydra/body)
+   )
+
+(if (equal enable-dape t)
+   (general-define-key
+      :keymaps '(python-mode-map typescript-ts-mode-map)
+      "C-c ."      'dape-hydra/body)
+   )
 
 (defun mrf/end-debug-session ()
    "End the debug session and delete project Python buffers."
@@ -879,25 +1166,8 @@
    (dap-ui-show-many-windows)
    (dap-debug))
 
-;; This is a helpful macro that is used to put double quotes around a word.
-(defalias 'quote-word
-   (kmacro "\" M-d \" <left> C-y"))
-
-(defalias 'quote-region
-   (kmacro "C-w \" \" <left> C-y <right>"))
-
-
-;; (define-key python-mode-map (kbd "C-c ,") 'dap-hydra/body)
-(general-define-key
-   :keymaps '(python-mode-map dap-ui-mode-map)
-   "C-c C-g"    'elpy-goto-definition-other-window
-   "C-c g"      'elpy-goto-definition
-   "C-c C-q"    'quote-region
-   "C-c q"      'quote-word
-   "C-c ."      'dap-hydra/body)
-
 (defhydra dap-hydra (:color pink :hint nil :foreign-keys run)
-    "
+   "
   ^Stepping^          ^Switch^                 ^Breakpoints^          ^Debug^                     ^Eval
   ^^^^^^^^----------------------------------------------------------------------------------------------------------------
   _._: Next           _ss_: Session            _bb_: Toggle           _dd_: Debug                 _ee_: Eval
@@ -910,112 +1180,48 @@
                     _sS_: List sessions
                     _sR_: Session Repl
 "
-     ("n" dap-next)
-     ("i" dap-step-in)
-     ("o" dap-step-out)
-     ("." dap-next)
-     ("/" dap-step-in)
-     ("," dap-step-out)
-     ("c" dap-continue)
-     ("r" dap-restart-frame)
-     ("ss" dap-switch-session)
-     ("st" dap-switch-thread)
-     ("sf" dap-switch-stack-frame)
-     ("su" dap-up-stack-frame)
-     ("sd" dap-down-stack-frame)
-     ("sl" dap-ui-locals)
-     ("sb" dap-ui-breakpoints)
-     ("sR" dap-ui-repl)
-     ("sS" dap-ui-sessions)
-     ("bb" dap-breakpoint-toggle)
-     ("ba" dap-breakpoint-add)
-     ("bd" dap-breakpoint-delete)
-     ("bc" dap-breakpoint-condition)
-     ("bh" dap-breakpoint-hit-condition)
-     ("bl" dap-breakpoint-log-message)
-     ("dd" dap-debug)
-     ("dr" dap-debug-recent)
-     ("ds" dap-debug-restart)
-     ("dl" dap-debug-last)
-     ("de" dap-debug-edit-template)
-     ("ee" dap-eval)
-     ("ea" dap-ui-expressions-add)
-     ("er" dap-eval-region)
-     ("es" dap-eval-thing-at-point)
-     ("dx" mrf/end-debug-session)
-     ("dX" mrf/delete-all-debug-sessions)
-     ("x" nil "exit Hydra" :color yellow)
-     ("q" mrf/end-debug-session "quit" :color blue)
-     ("Q" mrf/delete-all-debug-sessions :color red))
-
-;;; =========================================================================
-(if (package-installed-p 'realgud)
-   (general-def python-mode-map
-      "M-p" 'python-nav-backward-defun
-      "M-n" 'python-nav-forward-defun
-      "C-c p" 'elpy-goto-definition
-      "C-c h" 'elpy-doc
-      "C-c , j" 'realgud:cmd-jump
-      "C-c , k" 'realgud:cmd-kill
-      "C-c , s" 'realgud:cmd-step
-      "C-c , n" 'realgud:cmd-next
-      "C-c , q" 'realgud:cmd-quit
-      "C-c , F" 'realgud:window-bt
-      "C-c , U" 'realgud:cmd-until
-      "C-c , X" 'realgud:cmd-clear
-      "C-c , !" 'realgud:cmd-shell
-      "C-c , b" 'realgud:cmd-break
-      "C-c , f" 'realgud:cmd-finish
-      "C-c , D" 'realgud:cmd-delete
-      "C-c , +" 'realgud:cmd-enable
-      "C-c , R" 'realgud:cmd-restart
-      "C-c , -" 'realgud:cmd-disable
-      "C-c , B" 'realgud:window-brkpt
-      "C-c , c" 'realgud:cmd-continue
-      "C-c , e" 'realgud:cmd-eval-dwim
-      "C-c , Q" 'realgud:cmd-terminate
-      "C-c , T" 'realgud:cmd-backtrace
-      "C-c , h" 'realgud:cmd-until-here
-      "C-c , u" 'realgud:cmd-older-frame
-      "C-c , 4" 'realgud:cmd-goto-loc-hist-4
-      "C-c , 5" 'realgud:cmd-goto-loc-hist-5
-      "C-c , 6" 'realgud:cmd-goto-loc-hist-6
-      "C-c , 7" 'realgud:cmd-goto-loc-hist-7
-      "C-c , 8" 'realgud:cmd-goto-loc-hist-8
-      "C-c , 9" 'realgud:cmd-goto-loc-hist-9
-      "C-c , d" 'realgud:cmd-newer-frame
-      "C-c , RET" 'realgud:cmd-repeat-last
-      "C-c , E" 'realgud:cmd-eval-at-point
-      "C-c , I" 'realgud:cmdbuf-info-describe
-      "C-c , C-d" 'realgud:pdb
-      "C-c , C-f" 'realgud:flake8-goto-msg-line
-      "C-c , C-i" 'realgud:cmd-info-breakpoints))
+   ("n" dap-next)
+   ("i" dap-step-in)
+   ("o" dap-step-out)
+   ("." dap-next)
+   ("/" dap-step-in)
+   ("," dap-step-out)
+   ("c" dap-continue)
+   ("r" dap-restart-frame)
+   ("ss" dap-switch-session)
+   ("st" dap-switch-thread)
+   ("sf" dap-switch-stack-frame)
+   ("su" dap-up-stack-frame)
+   ("sd" dap-down-stack-frame)
+   ("sl" dap-ui-locals)
+   ("sb" dap-ui-breakpoints)
+   ("sR" dap-ui-repl)
+   ("sS" dap-ui-sessions)
+   ("bb" dap-breakpoint-toggle)
+   ("ba" dap-breakpoint-add)
+   ("bd" dap-breakpoint-delete)
+   ("bc" dap-breakpoint-condition)
+   ("bh" dap-breakpoint-hit-condition)
+   ("bl" dap-breakpoint-log-message)
+   ("dd" dap-debug)
+   ("dr" dap-debug-recent)
+   ("ds" dap-debug-restart)
+   ("dl" dap-debug-last)
+   ("de" dap-debug-edit-template)
+   ("ee" dap-eval)
+   ("ea" dap-ui-expressions-add)
+   ("er" dap-eval-region)
+   ("es" dap-eval-thing-at-point)
+   ("dx" mrf/end-debug-session)
+   ("dX" mrf/delete-all-debug-sessions)
+   ("x" nil "exit Hydra" :color yellow)
+   ("q" mrf/end-debug-session "quit" :color blue)
+   ("Q" mrf/delete-all-debug-sessions :color red))
 
 ;;; ------------------------------------------------------------------------
 (use-package pyvenv-auto
    :config (message "Starting pyvenv-auto")
    :hook ((python-mode . pyvenv-auto-run)))
-
-(use-package pydoc-info
-   :ensure
-   :straight (pydoc-info :type git :host github :repo "emacsattic/pydoc-info"))
-
-(info-lookup-add-help
-   :mode 'python-mode
-   :parse-rule 'pydoc-info-python-symbol-at-point
-   :doc-spec
-   '(("(python)Index" pydoc-info-lookup-transform-entry)
-       ("(sphinx)Index" pydoc-info-lookup-transform-entry)))
-
-(use-package info-lookmore
-   :straight (info-lookmore :type git
-  	      :host github :repo "emacsmirror/info-lookmore"))
-
-(info-lookup-add-help
-   :mode 'python-mode
-   :regexp "[[:alnum:]_]+"
-   :doc-spec
-   '(("(python)Index" nil "")))
 
 (use-package z80-mode
    :straight (z80-mode
@@ -1454,16 +1660,17 @@ capture was not aborted."
 (with-eval-after-load 'org
   (require 'ox-gfm nil t))
 
-(use-package org-ai
-   :disabled
-   :straight (org-ai :type git
-  	      :flavor melpa
-  	      :files (:defaults "snippets" "org-ai-pkg.el")
-  	      :host github :repo "rksm/org-ai")
-   :custom
-   (org-ai-openai-api-token "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"))
-
-;; (load "copilot")
+(if (equal enable-org-ai t)
+   (use-package org-ai
+      :straight (org-ai :type git
+  		 :flavor melpa
+  		 :files (:defaults "snippets" "org-ai-pkg.el")
+  		 :host github :repo "rksm/org-ai")
+      :custom
+      (org-ai-openai-api-token "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")
+      ;; :config
+      ;; (load "copilot")
+      ))
 
 (use-package solaire-mode
    :hook (after-init . solaire-global-mode)
@@ -1487,18 +1694,18 @@ capture was not aborted."
    (doom-modeline-vcs-max-length 50)
    )
 
-(use-package golden-ratio
-   :disabled
-   :hook (after-init . golden-ratio-mode)
-   :custom
-   (golden-ratio-exclude-modes '(occur-mode
-  				 undo-tree-visualizer-mode
-  				 dap-ui-repl-mode
-  				 dap-mode
-  				 dap-ui-mode
-  				 dap-ui-many-windows-mode
-  				 inferior-python-mode)))
-;; (golden-ratio-auto-scale t))
+(if (equal enable-golden-ratio t)
+   (use-package golden-ratio
+      :hook (after-init . golden-ratio-mode)
+      :custom
+      ;; (golden-ratio-auto-scale t)
+      (golden-ratio-exclude-modes '(occur-mode
+  				    undo-tree-visualizer-mode
+  				    dap-ui-repl-mode
+  				    dap-mode
+  				    dap-ui-mode
+  				    dap-ui-many-windows-mode
+  				    inferior-python-mode))))
 
 ;;; ------------------------------------------------------------------------
 
@@ -1511,7 +1718,7 @@ capture was not aborted."
 (use-package all-the-icons
    :if (display-graphic-p))
 
-;; Value of dashb oard-startup-banner can be
+;; Value of dashboard-startup-banner can be
 ;; - nil to display no banner
 ;; - 'official which displays the official emacs logo
 ;; - 'logo which displays an alternative emacs logo
@@ -1529,53 +1736,19 @@ capture was not aborted."
    :hook ((after-init     . dashboard-refresh-buffer)
           (dashboard-mode . mrf/dashboard-banner))
    :custom
-   (dashboard-items '((recents . 9)
-                        (bookmarks . 5)
-                        (projects . 5)))
+   (dashboard-items '((recents . 10)
+                      (bookmarks . 5)
+                      (projects . 5)))
+   (initial-buffer-choice (lambda () (get-buffer-create "*dashboard*")))
+   (dashboard-center-content t)
+   (dashboard-icon-type 'all-the-icons) ;; use `all-the-icons' package
+   (dashboard-display-icons-p t)
+   (dashboard-set-heading-icons t)
+   (dashboard-set-file-icons t)
    :config
    (dashboard-setup-startup-hook)
    (dashboard-open)
-   (setq dashboard-center-content t)
    (global-set-key (kbd "C-c d") 'dashboard-open))
-
-;;; ------------------------------------------------------------------------
-
-(defvar ac-directory (unless (file-exists-p "auto-complete")
-                     (make-directory "auto-complete")))
-(add-to-list 'load-path ac-directory)
-
-(require 'auto-complete)
-(ac-config-default)
-
-(global-auto-complete-mode 1)
-(setq-default ac-sources '(ac-source-pycomplete
-                           ac-source-yasnippet
-                           ac-source-abbrev
-                           ac-source-dictionary
-                           ac-source-words-in-same-mode-buffers))
-
-; hack to fix ac-sources after pycomplete.el breaks it
-(add-hook 'python-mode-hook
-          #'(lambda ()
-             (setq ac-sources '(ac-source-pycomplete
-                                ac-source-yasnippet
-                                ac-source-abbrev
-                                ac-source-dictionary
-                                ac-source-words-in-same-mode-buffers))))
-
-;; from http://truongtx.me/2013/01/06/config-yasnippet-and-autocomplete-on-emacs/
-; set the trigger key so that it can work together with yasnippet on
-; tab key, if the word exists in yasnippet, pressing tab will cause
-; yasnippet to activate, otherwise, auto-complete will
-(ac-set-trigger-key "TAB")
-(ac-set-trigger-key "<tab>")
-
-
-;; from http://blog.deadpansincerity.com/2011/05/setting-up-emacs-as-a-javascript-editing-environment-for-fun-and-profit/
-; Start auto-completion after 2 characters of a word
-(setq ac-auto-start 2)
-; case sensitivity is important when finding matches
-(setq ac-ignore-case nil)
 
 (use-package vundo
    :straight (vundo :type git
@@ -1682,14 +1855,14 @@ capture was not aborted."
    "C-c i F" 'mrf/insert-buffer-full-name-at-point
    )
 
-(use-package centaur-tabs
-   :init
-   :disabled
-   ;; Set the style to rounded with icons (setq centaur-tabs-style "bar")
-   (setq centaur-tabs-style "bar")
-   (setq centaur-tabs-set-icons t)
-   :config ;; Enable centaur-tabs
-   (centaur-tabs-mode nil))
+(if (equal enable-centaur-tabs t)
+   (use-package centaur-tabs
+      :init
+      ;; Set the style to rounded with icons (setq centaur-tabs-style "bar")
+      (setq centaur-tabs-style "bar")
+      (setq centaur-tabs-set-icons t)
+      :config ;; Enable centaur-tabs
+      (centaur-tabs-mode nil)))
 
 (use-package diff-hl
    :straight (diff-hl :type git :flavor melpa :host github :repo "dgutov/diff-hl"))
@@ -1837,13 +2010,13 @@ capture was not aborted."
    ;; If you edit it by hand, you could mess it up, so be careful.
    ;; Your init file should contain only one such instance.
    ;; If there is more than one, they won't work right.
-    '(warning-suppress-log-types
-    '(((python python-shell-completion-native-turn-on-maybe))
-    	((package reinitialization))
-    	(use-package)
-    	(python-mode)
-    	(package-initialize))))
-
+   '(warning-suppress-log-types
+       '(((python python-shell-completion-native-turn-on-maybe))
+  	 ((package reinitialization))
+  	 (treesit)
+  	 (use-package)
+  	 (python-mode)
+  	 (package-initialize))))
   ;;; init.el ends here.
 (custom-set-faces
    ;; custom-set-faces was added by Custom.
@@ -1851,5 +2024,3 @@ capture was not aborted."
    ;; Your init file should contain only one such instance.
    ;; If there is more than one, they won't work right.
    )
-
-;;  (dashboard-open)
